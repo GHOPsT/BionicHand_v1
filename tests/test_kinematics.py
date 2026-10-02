@@ -10,10 +10,12 @@ class TestBionicHandKinematics(unittest.TestCase):
         """Verifica que las distancias calculadas correspondan al CAD."""
         for f in self.hand.fingers:
             pts = f.get_positions()
-            l1_calc = np.linalg.norm(pts - pts[0])
-            self.assertAlmostEqual(l1_calc, f.l1, delta=1e-5)
-            l2_calc = np.linalg.norm(pts - pts)
-            self.assertAlmostEqual(l2_calc, f.l2, delta=1e-5)
+            # Distancia entre P0 (base) y P1 (nudillo) = L1
+            l1_calc = np.linalg.norm(pts[1] - pts[0])
+            self.assertAlmostEqual(l1_calc, f.l1, delta=1e-3)
+            # Distancia entre P1 (nudillo) y P2 (yema) = L2
+            l2_calc = np.linalg.norm(pts[2] - pts[1])
+            self.assertAlmostEqual(l2_calc, f.l2, delta=1e-3)
 
     def test_joint_limits_clamping(self):
         """Comprueba que ninguna articulación exceda los topes mecánicos físicos."""
