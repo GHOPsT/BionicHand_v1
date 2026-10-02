@@ -156,40 +156,20 @@ FINGER_DIMENSIONS["index"] = {
     "total_length": 77.50
 }
 ```
-
----
-
-## 🐛 Solución de Problemas
-
-| Problema | Solución |
-|----------|----------|
-| Docker no inicia | Reinstalar Docker Desktop |
-| Ventana no aparece en Mac M1 | Usar X11 forwarding o VNC |
-| Lentitud 3D | Reducir resolución o usar GPU remota |
-| Imagen muy grande | Limpiar con `docker system prune` |
-
 ---
 
 ## 📈 Roadmap (Etapas Futuras)
 
 - **Etapa 2**: Simulación dinámica (CoppeliaSim)
 - **Etapa 3**: Feedback electromiográfico (EMG)
-- **Etapa 4**: Control por visión (Computer Vision)
-- **Etapa 5**: Integración hardware (Raspberry Pi)
 
 ---
 
 ## 👥 Equipo Técnico
 
-**Desarrollado por**: [Tu Nombre/Equipo]  
+**Desarrollado por**: GHOPsT
 **Versión**: 1.0  
 **Última actualización**: 2026-10-01  
-
----
-
-## 📞 Soporte
-
-Para problemas técnicos, contactar al equipo de desarrollo.
 
 ---
 

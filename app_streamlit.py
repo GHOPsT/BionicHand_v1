@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import streamlit as st
 import numpy as np
-import plotly.graph_objects as go
+from plotly import graph_objects as go
 from core.hand import BionicHand
 from control.poses import Pose, POSE_ACTUATOR_MAP
 from config.dimensions import FINGER_DIMENSIONS, PALM_SPACING, JOINT_LIMITS, COUPLING_RATIO_4BAR
