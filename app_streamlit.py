@@ -29,6 +29,69 @@ def get_hand_instance():
     """Cachea la instancia de BionicHand para evitar recálculos"""
     return BionicHand()
 
+@st.cache_data
+def compute_finger_positions_cached(u_idx, u_grp, u_thb, finger_name):
+    """Cachea el cálculo de posiciones 3D para cada dedo"""
+    from config.dimensions import FINGER_DIMENSIONS, PALM_SPACING, JOINT_LIMITS
+    
+    d = FINGER_DIMENSIONS[
+        "thumb" if finger_name == "Pulgar" else
+        "index" if finger_name == "Índice" else
+        "middle" if finger_name == "Medio" else
+        "ring" if finger_name == "Anular" else "pinky"
+    ]
+    l1, l2 = d["l1_proximal"], d["l2_distal"]
+    
+    if finger_name == "Pulgar":
+        mcp_max = JOINT_LIMITS["thumb_base_flexion"][1]
+        pip_max = JOINT_LIMITS["thumb_pip_flexion"][1]
+        t1_deg = u_thb * mcp_max
+        t2_deg = u_thb * 0.90 * pip_max
+        
+        t1 = np.radians(t1_deg)
+        phi = np.radians(t1_deg + t2_deg)
+        origin = np.array([-12.0, 20.0, 9.0])
+        
+        v1 = np.array([
+            -l1 * np.cos(t1) * 0.5 + 0.4 * l1 * np.sin(t1),
+             l1 * np.cos(t1) * 0.6 - 0.15 * l1 * np.sin(t1),
+             l1 * 0.15 + l1 * np.sin(t1) * 0.6
+        ])
+        p1 = origin + v1
+        
+        v2 = np.array([
+            -l2 * 0.4 * np.cos(phi) + 0.5 * l2 * np.sin(phi),
+             l2 * np.cos(phi) * 0.5 - 0.3 * l2 * np.sin(phi),
+             l2 * 0.15 + l2 * np.sin(phi) * 0.7
+        ])
+        p2 = p1 + v2
+        
+        return np.array([origin, p1, p2]), t1_deg, t2_deg
+    
+    else:
+        u = u_idx if finger_name == "Índice" else u_grp
+        mcp_max = JOINT_LIMITS["mcp_base_flexion"][1]
+        pip_max = JOINT_LIMITS["pip_middle_flexion"][1]
+        t1_deg = u * mcp_max
+        t2_deg = u * COUPLING_RATIO_4BAR * pip_max
+        
+        t1 = np.radians(t1_deg)
+        phi = np.radians(t1_deg + t2_deg)
+        
+        x_offsets = {
+            "Índice": 0.0,
+            "Medio": PALM_SPACING["index_to_middle"],
+            "Anular": PALM_SPACING["index_to_middle"] + PALM_SPACING["middle_to_ring"],
+            "Meñique": PALM_SPACING["index_to_middle"] + PALM_SPACING["middle_to_ring"] + PALM_SPACING["ring_to_pinky"]
+        }
+        y_offsets = {"Índice": 68.0, "Medio": 72.0, "Anular": 69.0, "Meñique": 62.0}
+        origin = np.array([x_offsets[finger_name], y_offsets[finger_name], 0.0])
+        
+        p1 = origin + np.array([0.0, l1 * np.cos(t1), l1 * np.sin(t1)])
+        p2 = p1 + np.array([0.0, l2 * np.cos(phi), l2 * np.sin(phi)])
+        
+        return np.array([origin, p1, p2]), t1_deg, t2_deg
+
 # ============ CONFIGURACIÓN STREAMLIT ============
 st.set_page_config(
     page_title="BionicHand 3D Simulator",
@@ -93,74 +156,6 @@ with col_left:
         "Anular": "#f59e0b",
         "Meñique": "#8b5cf6"
     }
-    
-    # =========== FUNCIÓN PARA CALCULAR POSICIONES 3D ===========
-    def compute_finger_3d(finger, name):
-        """Calcula coordenadas 3D correctas con Z basado en flexión (como visualizer.py)"""
-        from config.dimensions import FINGER_DIMENSIONS, PALM_SPACING, JOINT_LIMITS
-        
-        d = FINGER_DIMENSIONS[
-            "thumb" if name == "Pulgar" else
-            "index" if name == "Índice" else
-            "middle" if name == "Medio" else
-            "ring" if name == "Anular" else "pinky"
-        ]
-        l1, l2 = d["l1_proximal"], d["l2_distal"]
-        
-        if name == "Pulgar":
-            # Pulgar: más complejo con oposición 3D
-            u = st.session_state.u_thb
-            mcp_max = JOINT_LIMITS["thumb_base_flexion"][1]
-            pip_max = JOINT_LIMITS["thumb_pip_flexion"][1]
-            t1_deg = u * mcp_max
-            t2_deg = u * 0.90 * pip_max
-            
-            t1 = np.radians(t1_deg)
-            phi = np.radians(t1_deg + t2_deg)
-            origin = np.array([-12.0, 20.0, 9.0])
-            
-            # Oposición 3D reducida para evitar deformación excesiva
-            v1 = np.array([
-                -l1 * np.cos(t1) * 0.5 + 0.4 * l1 * np.sin(t1),
-                 l1 * np.cos(t1) * 0.6 - 0.15 * l1 * np.sin(t1),
-                 l1 * 0.15 + l1 * np.sin(t1) * 0.6
-            ])
-            p1 = origin + v1
-            
-            v2 = np.array([
-                -l2 * 0.4 * np.cos(phi) + 0.5 * l2 * np.sin(phi),
-                 l2 * np.cos(phi) * 0.5 - 0.3 * l2 * np.sin(phi),
-                 l2 * 0.15 + l2 * np.sin(phi) * 0.7
-            ])
-            p2 = p1 + v2
-            
-            return np.array([origin, p1, p2]), t1_deg, t2_deg
-        
-        else:
-            # Otros dedos: 2D en planta, flexión en Z
-            u = st.session_state.u_idx if name == "Índice" else st.session_state.u_grp
-            mcp_max = JOINT_LIMITS["mcp_base_flexion"][1]
-            pip_max = JOINT_LIMITS["pip_middle_flexion"][1]
-            t1_deg = u * mcp_max
-            t2_deg = u * COUPLING_RATIO_4BAR * pip_max
-            
-            t1 = np.radians(t1_deg)
-            phi = np.radians(t1_deg + t2_deg)
-            
-            x_offsets = {
-                "Índice": 0.0,
-                "Medio": PALM_SPACING["index_to_middle"],
-                "Anular": PALM_SPACING["index_to_middle"] + PALM_SPACING["middle_to_ring"],
-                "Meñique": PALM_SPACING["index_to_middle"] + PALM_SPACING["middle_to_ring"] + PALM_SPACING["ring_to_pinky"]
-            }
-            y_offsets = {"Índice": 68.0, "Medio": 72.0, "Anular": 69.0, "Meñique": 62.0}
-            origin = np.array([x_offsets[name], y_offsets[name], 0.0])
-            
-            # Flexión hacia adelante (+Z) y cierre hacia palma (-Y)
-            p1 = origin + np.array([0.0, l1 * np.cos(t1), l1 * np.sin(t1)])
-            p2 = p1 + np.array([0.0, l2 * np.cos(phi), l2 * np.sin(phi)])
-            
-            return np.array([origin, p1, p2]), t1_deg, t2_deg
     
     # Función para generar cilindro 3D como superficie real
     def draw_cylinder_surface3d(p1, p2, radius, color):
@@ -243,7 +238,13 @@ with col_left:
     finger_names = ["Pulgar", "Índice", "Medio", "Anular", "Meñique"]
     for i, finger in enumerate(hand.fingers):
         name = finger_names[i]
-        pts, mcp_deg, pip_deg = compute_finger_3d(finger, name)
+        # Usar función cacheada para evitar recálculos
+        pts, mcp_deg, pip_deg = compute_finger_positions_cached(
+            st.session_state.u_idx, 
+            st.session_state.u_grp, 
+            st.session_state.u_thb, 
+            name
+        )
         color = colors_map[name]
         
         # Falange proximal (segmento 1) - cilindro Surface3d
