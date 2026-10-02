@@ -383,6 +383,32 @@ with col_left:
     )
     
     st.plotly_chart(fig_3d, use_container_width=True)
+    
+    # =========== INFORMACIÓN TÉCNICA (DEBAJO DEL 3D) ===========
+    st.divider()
+    with st.expander("ℹ️ Información Técnica", expanded=False):
+        info_cols = st.columns(3)
+        
+        with info_cols[0]:
+            st.write("**Especificaciones:**")
+            st.write(f"- Dedos: 5 (Pulgar + 4 dedos)")
+            st.write(f"- DOF por dedo: 2 (MCP + PIP)")
+            st.write(f"- Servos: 3 (independientes)")
+            st.write(f"- Rango PWM: 1000-2000 µs")
+        
+        with info_cols[1]:
+            st.write("**Límites Articulares:**")
+            st.write(f"- MCP: 0° - 80°")
+            st.write(f"- PIP: 0° - 70°")
+            st.write(f"- Pulgar: 0° - 75° (base)")
+            st.write(f"- Acoplamiento 4-bar: 0.875")
+        
+        with info_cols[2]:
+            st.write("**Medidas CAD (mm):**")
+            st.write(f"- Índice total: 77.50 mm")
+            st.write(f"- Medio total: 81.52 mm")
+            st.write(f"- Pulgar total: 79.06 mm")
+            st.write(f"- Precisión: 2 decimales")
 
 # ============ COLUMNA DERECHA: CONTROLES ============
 with col_right:
@@ -481,33 +507,6 @@ with col_right:
                 st.metric("MCP", f"{angles['mcp_deg']:.1f}°", label_visibility="collapsed")
             with col2:
                 st.metric("PIP", f"{angles['pip_deg']:.1f}°", label_visibility="collapsed")
-
-# ============ SECCIÓN INFERIOR: INFORMACIÓN ============
-st.divider()
-
-with st.expander("ℹ️ Información Técnica", expanded=False):
-    info_cols = st.columns(3)
-    
-    with info_cols[0]:
-        st.write("**Especificaciones:**")
-        st.write(f"- Dedos: 5 (Pulgar + 4 dedos)")
-        st.write(f"- DOF por dedo: 2 (MCP + PIP)")
-        st.write(f"- Servos: 3 (independientes)")
-        st.write(f"- Rango PWM: 1000-2000 µs")
-    
-    with info_cols[1]:
-        st.write("**Límites Articulares:**")
-        st.write(f"- MCP: 0° - 80°")
-        st.write(f"- PIP: 0° - 70°")
-        st.write(f"- Pulgar: 0° - 75° (base)")
-        st.write(f"- Acoplamiento 4-bar: 0.875")
-    
-    with info_cols[2]:
-        st.write("**Medidas CAD (mm):**")
-        st.write(f"- Índice total: 77.50 mm")
-        st.write(f"- Medio total: 81.52 mm")
-        st.write(f"- Pulgar total: 79.06 mm")
-        st.write(f"- Precisión: 2 decimales")
 
 st.write("---")
 st.write("🔄 **Etapa 1 (Cinemática)** | 📈 Etapa 2 (Simulación Dinámica) | 🧠 Etapa 3 (EMG Control)")
