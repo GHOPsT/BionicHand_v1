@@ -271,15 +271,69 @@ with col_left:
             hoverinfo='skip'
         ))
     
-    # Palma simplificada
-    palm_origin = [0, 50, 0]
-    fig_3d.add_trace(go.Scatter3d(
-        x=[palm_origin[0]], y=[palm_origin[1]], z=[palm_origin[2]],
-        mode='markers',
+    # Palma volumétrica 3D - Malla Mesh3d
+    palm_top_pts = [
+        [-20.0, 45.0, 5],     # Base eminencia tenar
+        [-25.0, 26.0, 8],     # Inserción pulgar
+        [-10.0, 50.0, 3],     # Borde radial índice
+        [0, 68, 2],           # Nudillo Índice
+        [20.8, 72, 2],        # Nudillo Medio
+        [41.4, 69, 2],        # Nudillo Anular
+        [62.9, 62, 3],        # Nudillo Meñique
+        [70.0, 40.0, 4],      # Lado hipotenar superior
+        [65.0, 15.0, 6],      # Lado hipotenar inferior
+        [30.0, -5.0, 5],      # Muñeca lateral
+        [-15.0, -5.0, 5]      # Muñeca medial
+    ]
+    
+    palm_top = np.array(palm_top_pts)
+    palm_bot = palm_top.copy()
+    palm_bot[:, 2] -= 12.0  # Profundidad palmar
+    
+    # Vértices combinados
+    palm_verts = np.vstack([palm_top, palm_bot])
+    n_palm = len(palm_top)
+    
+    # Generar índices de caras
+    i_idx = []
+    j_idx = []
+    k_idx = []
+    
+    # Caras laterales conectando dorso con palma
+    for idx in range(n_palm - 1):
+        next_idx = idx + 1
+        # Triángulo 1: dorso superior
+        i_idx.append(idx)
+        j_idx.append(next_idx)
+        k_idx.append(n_palm + idx)
+        # Triángulo 2: palma inferior
+        i_idx.append(next_idx)
+        j_idx.append(n_palm + next_idx)
+        k_idx.append(n_palm + idx)
+    
+    # Cerrar anillo (último con primero)
+    i_idx.append(n_palm - 1)
+    j_idx.append(0)
+    k_idx.append(2 * n_palm - 1)
+    
+    i_idx.append(0)
+    j_idx.append(n_palm)
+    k_idx.append(2 * n_palm - 1)
+    
+    palm_mesh = go.Mesh3d(
+        x=palm_verts[:, 0],
+        y=palm_verts[:, 1],
+        z=palm_verts[:, 2],
+        i=i_idx,
+        j=j_idx,
+        k=k_idx,
+        color='#c8bda8',
+        opacity=0.65,
         name="Palma",
-        marker=dict(size=14, color='#c8bda8', symbol='diamond'),
+        showlegend=True,
         hovertemplate="Palma<extra></extra>"
-    ))
+    )
+    fig_3d.add_trace(palm_mesh)
     
     # Configuración de la vista 3D
     fig_3d.update_layout(
