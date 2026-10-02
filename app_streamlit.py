@@ -88,40 +88,95 @@ with col_left:
         "Meñique": "#8b5cf6"
     }
     
-    # Función auxiliar para dibujar cilindro (falange)
-    def draw_cylinder(fig, p_base, p_end, radius, color, name):
-        """Dibuja un cilindro entre dos puntos usando scatter 3D"""
-        # Posiciones intermedias para simular cilindro
-        segments = 5
-        for i in range(segments):
-            t = i / segments
-            x = p_base[0] + (p_end[0] - p_base[0]) * t
-            y = p_base[1] + (p_end[1] - p_base[1]) * t
-            z = p_base[2] + (p_end[2] - p_base[2]) * t
+    # Función para generar cilindro 3D real en Plotly
+    def create_cylinder_mesh(p1, p2, radius, color, num_segments=12):
+        """Genera un cilindro volumétrico con mesh3d entre dos puntos"""
+        # Vector del eje
+        axis = np.array(p2) - np.array(p1)
+        axis_len = np.linalg.norm(axis)
+        if axis_len == 0:
+            return None
+        
+        axis_normalized = axis / axis_len
+        
+        # Vectores perpendiculares al eje
+        if abs(axis_normalized[0]) < 0.9:
+            perp1 = np.array([0, -axis_normalized[2], axis_normalized[1]])
+        else:
+            perp1 = np.array([-axis_normalized[1], axis_normalized[0], 0])
+        
+        perp1 = perp1 / np.linalg.norm(perp1)
+        perp2 = np.cross(axis_normalized, perp1)
+        
+        # Generar vértices del cilindro
+        angles = np.linspace(0, 2*np.pi, num_segments, endpoint=False)
+        
+        # Círculo en punto 1
+        vertices_p1 = []
+        for angle in angles:
+            v = np.array(p1) + radius * (perp1 * np.cos(angle) + perp2 * np.sin(angle))
+            vertices_p1.append(v)
+        
+        # Círculo en punto 2
+        vertices_p2 = []
+        for angle in angles:
+            v = np.array(p2) + radius * (perp1 * np.cos(angle) + perp2 * np.sin(angle))
+            vertices_p2.append(v)
+        
+        vertices = vertices_p1 + vertices_p2
+        x_coords = [v[0] for v in vertices]
+        y_coords = [v[1] for v in vertices]
+        z_coords = [v[2] for v in vertices]
+        
+        # Generar caras
+        faces_i, faces_j, faces_k = [], [], []
+        
+        # Caras laterales
+        for i in range(num_segments):
+            i_next = (i + 1) % num_segments
+            # Triángulo 1
+            faces_i.extend([i, i_next, i + num_segments])
+            faces_j.extend([i_next, i + num_segments, i_next + num_segments])
+            faces_k.extend([i + num_segments, i_next + num_segments, i])
             
-            fig.add_trace(go.Scatter3d(
-                x=[x], y=[y], z=[z],
-                mode='markers',
-                marker=dict(size=radius*1.5, color=color, opacity=0.7),
-                name=name if i == 0 else "",
-                showlegend=(i == 0),
-                hoverinfo='skip'
-            ))
+            # Triángulo 2
+            faces_i.extend([i_next, i_next + num_segments, i])
+            faces_j.extend([i_next + num_segments, i, i_next])
+            faces_k.extend([i, i_next, i_next + num_segments])
+        
+        return go.Mesh3d(
+            x=x_coords, y=y_coords, z=z_coords,
+            i=faces_i, j=faces_j, k=faces_k,
+            opacity=0.75,
+            color=color,
+            name="",
+            showlegend=False,
+            hoverinfo='skip'
+        )
     
     # Dibujar dedos con cilindros volumétricos
     for finger in hand.fingers:
         pts = finger.get_positions()  # [P0_base, P1_knuckle, P2_tip]
         color = colors_map[finger.name]
         
-        # Línea esquelética principal (en Z=0 para vista frontal)
+        # Falange proximal (segmento 1)
+        cylinder1 = create_cylinder_mesh(pts[0], pts[1], 4.5, color)
+        if cylinder1:
+            fig_3d.add_trace(cylinder1)
+        
+        # Falange distal (segmento 2)
+        cylinder2 = create_cylinder_mesh(pts[1], pts[2], 4.0, color)
+        if cylinder2:
+            fig_3d.add_trace(cylinder2)
+        
+        # Línea esquelética (para referencia)
         fig_3d.add_trace(go.Scatter3d(
             x=pts[:, 0], 
             y=pts[:, 1], 
-            z=[0, 0, 0],
-            mode='lines+markers',
+            z=pts[:, 2],
+            mode='lines',
             name=f"{finger.name} ({finger.mcp.angle:.1f}°)",
-            line=dict(color=color, width=8),
-            marker=dict(size=8, color=color),
+            line=dict(color=color, width=4),
             hovertemplate=f"{finger.name}<br>MCP: {finger.mcp.angle:.1f}°<br>PIP: {finger.pip.angle:.1f}°<extra></extra>"
         ))
         
@@ -129,9 +184,9 @@ with col_left:
         fig_3d.add_trace(go.Scatter3d(
             x=pts[:, 0], 
             y=pts[:, 1], 
-            z=[0, 0, 0],
+            z=pts[:, 2],
             mode='markers',
-            marker=dict(size=7, color=color, symbol='circle'),
+            marker=dict(size=6, color=color, symbol='circle'),
             showlegend=False,
             hoverinfo='skip'
         ))
@@ -142,30 +197,33 @@ with col_left:
         x=[palm_origin[0]], y=[palm_origin[1]], z=[palm_origin[2]],
         mode='markers',
         name="Palma",
-        marker=dict(size=14, color='#d9d9d9', symbol='diamond'),
+        marker=dict(size=14, color='#c8bda8', symbol='diamond'),
         hovertemplate="Palma<extra></extra>"
     ))
     
     # Configuración de la vista 3D
     fig_3d.update_layout(
-        title="🤖 Mano Biónica — Visualización 3D Interactiva",
+        title="🤖 Mano Biónica — Visualización 3D Volumétrica",
         scene=dict(
-            xaxis=dict(title="X (mm)", range=[-60, 100], backgroundcolor="rgb(20,20,20)"),
-            yaxis=dict(title="Y (mm)", range=[-20, 100], backgroundcolor="rgb(20,20,20)"),
-            zaxis=dict(title="Z (mm)", range=[-30, 30], backgroundcolor="rgb(20,20,20)"),
+            xaxis=dict(title="X (mm)", range=[-60, 100], backgroundcolor="rgb(20,20,20)", gridcolor="rgb(40,40,40)"),
+            yaxis=dict(title="Y (mm)", range=[-20, 100], backgroundcolor="rgb(20,20,20)", gridcolor="rgb(40,40,40)"),
+            zaxis=dict(title="Z (mm)", range=[-30, 30], backgroundcolor="rgb(20,20,20)", gridcolor="rgb(40,40,40)"),
             camera=dict(
-                eye=dict(x=1.2, y=1.5, z=1.2),
-                center=dict(x=0, y=0, z=0)
+                eye=dict(x=1.2, y=1.2, z=0.9),
+                center=dict(x=0, y=0, z=0),
+                up=dict(x=0, y=0, z=1)
             ),
             aspectmode='data'
         ),
         hovermode='closest',
-        height=650,
+        height=700,
         width=None,
         showlegend=True,
         template="plotly_dark",
-        font=dict(size=11),
-        margin=dict(l=0, r=0, b=0, t=40)
+        font=dict(size=10, family="Arial"),
+        margin=dict(l=0, r=0, b=0, t=50),
+        paper_bgcolor="#1e222b",
+        plot_bgcolor="#1e222b"
     )
     
     st.plotly_chart(fig_3d, use_container_width=True)
