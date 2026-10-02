@@ -88,87 +88,67 @@ with col_left:
         "Meñique": "#8b5cf6"
     }
     
-    # Función para generar cilindro 3D real en Plotly
-    def create_cylinder_mesh(p1, p2, radius, color, num_segments=12):
-        """Genera un cilindro volumétrico con mesh3d entre dos puntos"""
+    # Función para generar cilindro 3D usando scatter 3d (más visual)
+    def draw_cylinder_visual(p1, p2, radius, color, num_discs=8):
+        """Dibuja un cilindro como serie de discos usando scatter 3d"""
         try:
             p1 = np.asarray(p1, dtype=np.float64).flatten()
             p2 = np.asarray(p2, dtype=np.float64).flatten()
             
-            # Asegurar que tenemos exactamente 3 dimensiones
             if len(p1) != 3 or len(p2) != 3:
-                return None
+                return []
             
             # Vector del eje
             axis = p2 - p1
             axis_len = np.linalg.norm(axis)
             
-            if axis_len < 0.1:  # Si los puntos son muy cercanos
-                return None
+            if axis_len < 0.1:
+                return []
             
             axis_norm = axis / axis_len
             
-            # Encontrar un vector perpendicular al eje
-            # Usando la estrategia de Gram-Schmidt
+            # Vectores perpendiculares
             if abs(axis_norm[0]) < 0.9:
                 temp = np.array([1.0, 0.0, 0.0], dtype=np.float64)
             else:
                 temp = np.array([0.0, 1.0, 0.0], dtype=np.float64)
             
             perp1 = temp - np.dot(temp, axis_norm) * axis_norm
-            perp1 = perp1 / np.linalg.norm(perp1)
+            perp1 = perp1 / (np.linalg.norm(perp1) + 1e-8)
             
-            # Segundo vector perpendicular (producto cruz)
             perp2 = np.cross(axis_norm, perp1)
-            perp2 = perp2 / np.linalg.norm(perp2)
+            perp2 = perp2 / (np.linalg.norm(perp2) + 1e-8)
             
-            # Generar vértices del cilindro
-            angles = np.linspace(0, 2*np.pi, num_segments, endpoint=False)
-            
-            # Círculo en punto 1
-            vertices_p1 = []
-            for angle in angles:
-                v = p1 + radius * (np.cos(angle) * perp1 + np.sin(angle) * perp2)
-                vertices_p1.append(v)
-            
-            # Círculo en punto 2
-            vertices_p2 = []
-            for angle in angles:
-                v = p2 + radius * (np.cos(angle) * perp1 + np.sin(angle) * perp2)
-                vertices_p2.append(v)
-            
-            vertices = vertices_p1 + vertices_p2
-            x_coords = [float(v[0]) for v in vertices]
-            y_coords = [float(v[1]) for v in vertices]
-            z_coords = [float(v[2]) for v in vertices]
-            
-            # Generar caras
-            faces_i, faces_j, faces_k = [], [], []
-            
-            # Caras laterales
-            for i in range(num_segments):
-                i_next = (i + 1) % num_segments
-                # Triángulo 1
-                faces_i.append(i)
-                faces_j.append(i_next)
-                faces_k.append(i + num_segments)
+            # Crear discos a lo largo del cilindro
+            traces = []
+            for disc_idx in range(num_discs):
+                t = disc_idx / (num_discs - 1) if num_discs > 1 else 0.5
+                center = p1 + t * axis
                 
-                # Triángulo 2
-                faces_i.append(i_next)
-                faces_j.append(i_next + num_segments)
-                faces_k.append(i + num_segments)
+                # Círculo del disco
+                angles = np.linspace(0, 2*np.pi, 16, endpoint=True)
+                circle_pts = []
+                for angle in angles:
+                    pt = center + radius * (np.cos(angle) * perp1 + np.sin(angle) * perp2)
+                    circle_pts.append(pt)
+                
+                circle_pts = np.array(circle_pts)
+                
+                trace = go.Scatter3d(
+                    x=circle_pts[:, 0],
+                    y=circle_pts[:, 1],
+                    z=circle_pts[:, 2],
+                    mode='lines+markers',
+                    line=dict(color=color, width=3),
+                    marker=dict(size=2, color=color, opacity=0.6),
+                    showlegend=False,
+                    hoverinfo='skip'
+                )
+                traces.append(trace)
             
-            return go.Mesh3d(
-                x=x_coords, y=y_coords, z=z_coords,
-                i=faces_i, j=faces_j, k=faces_k,
-                opacity=0.75,
-                color=color,
-                name="",
-                showlegend=False,
-                hoverinfo='skip'
-            )
-        except Exception as e:
-            return None
+            return traces
+        except:
+            return []
     
     # Dibujar dedos con cilindros volumétricos
     for finger in hand.fingers:
@@ -178,24 +158,22 @@ with col_left:
         pts = np.column_stack([pts_2d, np.zeros(len(pts_2d))])
         color = colors_map[finger.name]
         
-        # Falange proximal (segmento 1)
-        cylinder1 = create_cylinder_mesh(pts[0], pts[1], 4.5, color)
-        if cylinder1:
-            fig_3d.add_trace(cylinder1)
+        # Falange proximal (segmento 1) - dibujar como serie de discos
+        for trace in draw_cylinder_visual(pts[0], pts[1], 4.5, color, num_discs=6):
+            fig_3d.add_trace(trace)
         
-        # Falange distal (segmento 2)
-        cylinder2 = create_cylinder_mesh(pts[1], pts[2], 4.0, color)
-        if cylinder2:
-            fig_3d.add_trace(cylinder2)
+        # Falange distal (segmento 2) - dibujar como serie de discos
+        for trace in draw_cylinder_visual(pts[1], pts[2], 4.0, color, num_discs=6):
+            fig_3d.add_trace(trace)
         
-        # Línea esquelética (para referencia)
+        # Línea esquelética central (para referencia)
         fig_3d.add_trace(go.Scatter3d(
             x=pts[:, 0], 
             y=pts[:, 1], 
             z=pts[:, 2],
             mode='lines',
             name=f"{finger.name} ({finger.mcp.angle:.1f}°)",
-            line=dict(color=color, width=4),
+            line=dict(color=color, width=5),
             hovertemplate=f"{finger.name}<br>MCP: {finger.mcp.angle:.1f}°<br>PIP: {finger.pip.angle:.1f}°<extra></extra>"
         ))
         
@@ -205,7 +183,7 @@ with col_left:
             y=pts[:, 1], 
             z=pts[:, 2],
             mode='markers',
-            marker=dict(size=6, color=color, symbol='circle'),
+            marker=dict(size=7, color=color, symbol='circle'),
             showlegend=False,
             hoverinfo='skip'
         ))
