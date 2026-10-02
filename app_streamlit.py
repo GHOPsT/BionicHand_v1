@@ -88,26 +88,26 @@ with col_left:
         "Meñique": "#8b5cf6"
     }
     
-    # Función para generar cilindro 3D usando scatter 3d (más visual)
-    def draw_cylinder_visual(p1, p2, radius, color, num_discs=8):
-        """Dibuja un cilindro como serie de discos usando scatter 3d"""
+    # Función para generar cilindro 3D como superficie real
+    def draw_cylinder_surface3d(p1, p2, radius, color):
+        """Dibuja un cilindro como superficie 3D real usando Surface3d"""
         try:
             p1 = np.asarray(p1, dtype=np.float64).flatten()
             p2 = np.asarray(p2, dtype=np.float64).flatten()
             
             if len(p1) != 3 or len(p2) != 3:
-                return []
+                return None
             
             # Vector del eje
             axis = p2 - p1
             axis_len = np.linalg.norm(axis)
             
             if axis_len < 0.1:
-                return []
+                return None
             
             axis_norm = axis / axis_len
             
-            # Vectores perpendiculares
+            # Vectores perpendiculares usando Gram-Schmidt
             if abs(axis_norm[0]) < 0.9:
                 temp = np.array([1.0, 0.0, 0.0], dtype=np.float64)
             else:
@@ -119,38 +119,53 @@ with col_left:
             perp2 = np.cross(axis_norm, perp1)
             perp2 = perp2 / (np.linalg.norm(perp2) + 1e-8)
             
-            # Crear discos a lo largo del cilindro
-            traces = []
-            for disc_idx in range(num_discs):
-                t = disc_idx / (num_discs - 1) if num_discs > 1 else 0.5
-                center = p1 + t * axis
-                
-                # Círculo del disco
-                angles = np.linspace(0, 2*np.pi, 16, endpoint=True)
-                circle_pts = []
-                for angle in angles:
-                    pt = center + radius * (np.cos(angle) * perp1 + np.sin(angle) * perp2)
-                    circle_pts.append(pt)
-                
-                circle_pts = np.array(circle_pts)
-                
-                trace = go.Scatter3d(
-                    x=circle_pts[:, 0],
-                    y=circle_pts[:, 1],
-                    z=circle_pts[:, 2],
-                    mode='lines+markers',
-                    line=dict(color=color, width=3),
-                    marker=dict(size=2, color=color, opacity=0.6),
-                    showlegend=False,
-                    hoverinfo='skip'
-                )
-                traces.append(trace)
+            # Generar malla cilíndrica
+            u = np.linspace(0, 2*np.pi, 16)  # ángulo
+            v = np.linspace(0, 1, 8)  # longitud del cilindro
             
-            return traces
-        except:
-            return []
+            x_grid = []
+            y_grid = []
+            z_grid = []
+            
+            for v_val in v:
+                row_x = []
+                row_y = []
+                row_z = []
+                
+                for u_val in u:
+                    # Posición a lo largo del eje
+                    center = p1 + v_val * axis
+                    # Punto en el círculo
+                    pt = center + radius * (np.cos(u_val) * perp1 + np.sin(u_val) * perp2)
+                    row_x.append(pt[0])
+                    row_y.append(pt[1])
+                    row_z.append(pt[2])
+                
+                x_grid.append(row_x)
+                y_grid.append(row_y)
+                z_grid.append(row_z)
+            
+            x_grid = np.array(x_grid)
+            y_grid = np.array(y_grid)
+            z_grid = np.array(z_grid)
+            
+            trace = go.Surface3d(
+                x=x_grid,
+                y=y_grid,
+                z=z_grid,
+                surfacecolor=np.ones_like(x_grid),
+                colorscale=[[0, color], [1, color]],
+                showscale=False,
+                hoverinfo='skip',
+                opacity=0.9,
+                showlegend=False
+            )
+            
+            return trace
+        except Exception as e:
+            return None
     
-    # Dibujar dedos con cilindros volumétricos
+    # Dibujar dedos con cilindros volumétricos 3D reales
     for finger in hand.fingers:
         pts_2d = finger.get_positions()  # Retorna (3, 2): [P0_Base, P1_Nudillo, P2_Yema] en 2D
         
@@ -158,13 +173,15 @@ with col_left:
         pts = np.column_stack([pts_2d, np.zeros(len(pts_2d))])
         color = colors_map[finger.name]
         
-        # Falange proximal (segmento 1) - dibujar como serie de discos
-        for trace in draw_cylinder_visual(pts[0], pts[1], 4.5, color, num_discs=6):
-            fig_3d.add_trace(trace)
+        # Falange proximal (segmento 1) - cilindro Surface3d
+        trace_prox = draw_cylinder_surface3d(pts[0], pts[1], 4.5, color)
+        if trace_prox is not None:
+            fig_3d.add_trace(trace_prox)
         
-        # Falange distal (segmento 2) - dibujar como serie de discos
-        for trace in draw_cylinder_visual(pts[1], pts[2], 4.0, color, num_discs=6):
-            fig_3d.add_trace(trace)
+        # Falange distal (segmento 2) - cilindro Surface3d
+        trace_dist = draw_cylinder_surface3d(pts[1], pts[2], 4.0, color)
+        if trace_dist is not None:
+            fig_3d.add_trace(trace_dist)
         
         # Línea esquelética central (para referencia)
         fig_3d.add_trace(go.Scatter3d(
