@@ -3,16 +3,25 @@ BionicHand Simulator — Aplicación Streamlit 3D
 Interfaz web interactiva para visualización y control de prótesis biónica
 """
 import sys
+import os
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Asegurar que el path está correcto para importaciones relativas
+current_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(current_dir))
 
 import streamlit as st
 import numpy as np
 from plotly import graph_objects as go
-from core.hand import BionicHand
-from control.poses import Pose, POSE_ACTUATOR_MAP
-from config.dimensions import FINGER_DIMENSIONS, PALM_SPACING, JOINT_LIMITS, COUPLING_RATIO_4BAR
+
+# Importar módulos locales con manejo de errores
+try:
+    from core.hand import BionicHand
+    from control.poses import Pose, POSE_ACTUATOR_MAP
+    from config.dimensions import FINGER_DIMENSIONS, PALM_SPACING, JOINT_LIMITS, COUPLING_RATIO_4BAR
+except ImportError as e:
+    st.error(f"❌ Error importando módulos: {e}")
+    st.stop()
 
 # ============ CONFIGURACIÓN STREAMLIT ============
 st.set_page_config(
@@ -121,7 +130,7 @@ with col_left:
         template="plotly_dark"
     )
     
-    st.plotly_chart(fig_3d, use_container_width=True)
+    st.plotly_chart(fig_3d, use_container_width=False)
 
 # ============ COLUMNA DERECHA: CONTROLES ============
 with col_right:
@@ -133,7 +142,7 @@ with col_right:
     pose_cols = st.columns(2, gap="small")
     
     with pose_cols[0]:
-        if st.button("🖐️ Abierta", use_container_width=True, key="pose_open"):
+        if st.button("🖐️ Abierta", use_container_width=False, key="pose_open"):
             p = POSE_ACTUATOR_MAP[Pose.OPEN_HAND]
             st.session_state.u_idx = p["index"]
             st.session_state.u_grp = p["group"]
@@ -141,7 +150,7 @@ with col_right:
             st.rerun()
     
     with pose_cols[1]:
-        if st.button("✊ Puño", use_container_width=True, key="pose_power"):
+        if st.button("✊ Puño", use_container_width=False, key="pose_power"):
             p = POSE_ACTUATOR_MAP[Pose.POWER_GRASP]
             st.session_state.u_idx = p["index"]
             st.session_state.u_grp = p["group"]
@@ -151,7 +160,7 @@ with col_right:
     pose_cols2 = st.columns(2, gap="small")
     
     with pose_cols2[0]:
-        if st.button("✌️ Pinza", use_container_width=True, key="pose_pinch"):
+        if st.button("✌️ Pinza", use_container_width=False, key="pose_pinch"):
             p = POSE_ACTUATOR_MAP[Pose.PINCH_GRIP]
             st.session_state.u_idx = p["index"]
             st.session_state.u_grp = p["group"]
@@ -159,7 +168,7 @@ with col_right:
             st.rerun()
     
     with pose_cols2[1]:
-        if st.button("☝️ Señalar", use_container_width=True, key="pose_point"):
+        if st.button("☝️ Señalar", use_container_width=False, key="pose_point"):
             p = POSE_ACTUATOR_MAP[Pose.POINTING]
             st.session_state.u_idx = p["index"]
             st.session_state.u_grp = p["group"]
