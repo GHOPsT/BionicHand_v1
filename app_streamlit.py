@@ -23,6 +23,12 @@ except ImportError as e:
     st.error(f"❌ Error importando módulos: {e}")
     st.stop()
 
+# ============ CACHING PARA OPTIMIZACIÓN ============
+@st.cache_resource
+def get_hand_instance():
+    """Cachea la instancia de BionicHand para evitar recálculos"""
+    return BionicHand()
+
 # ============ CONFIGURACIÓN STREAMLIT ============
 st.set_page_config(
     page_title="BionicHand 3D Simulator",
@@ -72,8 +78,8 @@ col_left, col_right = st.columns([2.5, 1])
 with col_left:
     st.subheader("📊 Visualización 3D Interactiva", divider="blue")
     
-    # Crear instancia de mano
-    hand = BionicHand()
+    # Usar instancia cacheada de mano
+    hand = get_hand_instance()
     hand.set_actuators(st.session_state.u_idx, st.session_state.u_grp, st.session_state.u_thb)
     
     # Crear figura 3D con Plotly
@@ -113,17 +119,18 @@ with col_left:
             phi = np.radians(t1_deg + t2_deg)
             origin = np.array([-12.0, 20.0, 9.0])
             
+            # Oposición 3D reducida para evitar deformación excesiva
             v1 = np.array([
-                -l1 * np.cos(t1) * 0.7 + 0.6 * l1 * np.sin(t1),
-                 l1 * np.cos(t1) * 0.7 - 0.2 * l1 * np.sin(t1),
-                 l1 * 0.2 + l1 * np.sin(t1) * 0.8
+                -l1 * np.cos(t1) * 0.5 + 0.4 * l1 * np.sin(t1),
+                 l1 * np.cos(t1) * 0.6 - 0.15 * l1 * np.sin(t1),
+                 l1 * 0.15 + l1 * np.sin(t1) * 0.6
             ])
             p1 = origin + v1
             
             v2 = np.array([
-                -l2 * 0.5 * np.cos(phi) + 0.7 * l2 * np.sin(phi),
-                 l2 * np.cos(phi) * 0.6 - 0.4 * l2 * np.sin(phi),
-                 l2 * 0.2 + l2 * np.sin(phi) * 0.9
+                -l2 * 0.4 * np.cos(phi) + 0.5 * l2 * np.sin(phi),
+                 l2 * np.cos(phi) * 0.5 - 0.3 * l2 * np.sin(phi),
+                 l2 * 0.15 + l2 * np.sin(phi) * 0.7
             ])
             p2 = p1 + v2
             
@@ -249,14 +256,14 @@ with col_left:
         if trace_dist is not None:
             fig_3d.add_trace(trace_dist)
         
-        # Línea esquelética central (para referencia)
+        # Línea esquelética central (para referencia) - más gruesa
         fig_3d.add_trace(go.Scatter3d(
             x=pts[:, 0], 
             y=pts[:, 1], 
             z=pts[:, 2],
             mode='lines',
             name=f"{finger.name} ({finger.mcp.angle:.1f}°)",
-            line=dict(color=color, width=5),
+            line=dict(color=color, width=8),
             hovertemplate=f"{finger.name}<br>MCP: {finger.mcp.angle:.1f}°<br>PIP: {finger.pip.angle:.1f}°<extra></extra>"
         ))
         
@@ -299,6 +306,18 @@ with col_left:
     j_idx = []
     k_idx = []
     
+    # Tapa superior (dorso) - polígono cerrado
+    for idx in range(n_palm - 2):
+        i_idx.append(0)
+        j_idx.append(idx + 1)
+        k_idx.append(idx + 2)
+    
+    # Tapa inferior (palma) - polígono cerrado
+    for idx in range(n_palm - 2):
+        i_idx.append(n_palm)
+        j_idx.append(n_palm + idx + 2)
+        k_idx.append(n_palm + idx + 1)
+    
     # Caras laterales conectando dorso con palma
     for idx in range(n_palm - 1):
         next_idx = idx + 1
@@ -314,9 +333,9 @@ with col_left:
     # Cerrar anillo (último con primero)
     i_idx.append(n_palm - 1)
     j_idx.append(0)
-    k_idx.append(2 * n_palm - 1)
+    k_idx.append(n_palm)
     
-    i_idx.append(0)
+    i_idx.append(n_palm - 1)
     j_idx.append(n_palm)
     k_idx.append(2 * n_palm - 1)
     
@@ -327,8 +346,8 @@ with col_left:
         i=i_idx,
         j=j_idx,
         k=k_idx,
-        color='#c8bda8',
-        opacity=0.65,
+        color='#d4c5b0',
+        opacity=0.75,
         name="Palma",
         showlegend=True,
         hovertemplate="Palma<extra></extra>"
