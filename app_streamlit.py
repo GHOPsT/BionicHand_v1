@@ -450,7 +450,8 @@ with col_right:
     st.divider()
     
     # === TELEMETRÍA EN TIEMPO REAL ===
-    st.write("**📊 Telemetría:**", help="Estado actual de servos y articulaciones")
+    st.write("**📊 Telemetría**")
+    st.caption("Estado actual de servos y articulaciones")
     
     hand_telemetry = hand.get_telemetry()
     
@@ -470,7 +471,8 @@ with col_right:
     st.divider()
     
     # Ángulos articulares - Formato compacto
-    st.write("**🔄 Ángulos:**", help="MCP y PIP por dedo")
+    st.write("**🔄 Ángulos**")
+    st.caption("MCP y PIP por dedo")
     
     for finger_name, angles in hand_telemetry["joints"].items():
         with st.expander(f"{finger_name}: {angles['mcp_deg']:.1f}° / {angles['pip_deg']:.1f}°", expanded=False):
