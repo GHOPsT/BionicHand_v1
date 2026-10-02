@@ -91,68 +91,88 @@ with col_left:
     # Función para generar cilindro 3D real en Plotly
     def create_cylinder_mesh(p1, p2, radius, color, num_segments=12):
         """Genera un cilindro volumétrico con mesh3d entre dos puntos"""
-        # Vector del eje
-        axis = np.array(p2) - np.array(p1)
-        axis_len = np.linalg.norm(axis)
-        if axis_len == 0:
-            return None
-        
-        axis_normalized = axis / axis_len
-        
-        # Vectores perpendiculares al eje
-        if abs(axis_normalized[0]) < 0.9:
-            perp1 = np.array([0, -axis_normalized[2], axis_normalized[1]])
-        else:
-            perp1 = np.array([-axis_normalized[1], axis_normalized[0], 0])
-        
-        perp1 = perp1 / np.linalg.norm(perp1)
-        perp2 = np.cross(axis_normalized, perp1)
-        
-        # Generar vértices del cilindro
-        angles = np.linspace(0, 2*np.pi, num_segments, endpoint=False)
-        
-        # Círculo en punto 1
-        vertices_p1 = []
-        for angle in angles:
-            v = np.array(p1) + radius * (perp1 * np.cos(angle) + perp2 * np.sin(angle))
-            vertices_p1.append(v)
-        
-        # Círculo en punto 2
-        vertices_p2 = []
-        for angle in angles:
-            v = np.array(p2) + radius * (perp1 * np.cos(angle) + perp2 * np.sin(angle))
-            vertices_p2.append(v)
-        
-        vertices = vertices_p1 + vertices_p2
-        x_coords = [v[0] for v in vertices]
-        y_coords = [v[1] for v in vertices]
-        z_coords = [v[2] for v in vertices]
-        
-        # Generar caras
-        faces_i, faces_j, faces_k = [], [], []
-        
-        # Caras laterales
-        for i in range(num_segments):
-            i_next = (i + 1) % num_segments
-            # Triángulo 1
-            faces_i.extend([i, i_next, i + num_segments])
-            faces_j.extend([i_next, i + num_segments, i_next + num_segments])
-            faces_k.extend([i + num_segments, i_next + num_segments, i])
+        try:
+            p1 = np.array(p1, dtype=float)
+            p2 = np.array(p2, dtype=float)
             
-            # Triángulo 2
-            faces_i.extend([i_next, i_next + num_segments, i])
-            faces_j.extend([i_next + num_segments, i, i_next])
-            faces_k.extend([i, i_next, i_next + num_segments])
-        
-        return go.Mesh3d(
-            x=x_coords, y=y_coords, z=z_coords,
-            i=faces_i, j=faces_j, k=faces_k,
-            opacity=0.75,
-            color=color,
-            name="",
-            showlegend=False,
-            hoverinfo='skip'
-        )
+            # Vector del eje
+            axis = p2 - p1
+            axis_len = np.linalg.norm(axis)
+            
+            if axis_len < 0.1:  # Si los puntos son muy cercanos
+                return None
+            
+            axis_normalized = axis / axis_len
+            
+            # Vectores perpendiculares al eje
+            # Usar mejor estrategia para encontrar vectores perpendiculares
+            if abs(axis_normalized[0]) < 0.9:
+                perp1_base = np.array([0.0, -axis_normalized[2], axis_normalized[1]], dtype=float)
+            else:
+                perp1_base = np.array([-axis_normalized[1], axis_normalized[0], 0.0], dtype=float)
+            
+            perp1_norm = np.linalg.norm(perp1_base)
+            if perp1_norm > 0.01:
+                perp1 = perp1_base / perp1_norm
+            else:
+                return None
+            
+            # Usar cross product correctamente
+            perp2 = np.cross(axis_normalized, perp1)
+            perp2_norm = np.linalg.norm(perp2)
+            if perp2_norm > 0.01:
+                perp2 = perp2 / perp2_norm
+            else:
+                return None
+            
+            # Generar vértices del cilindro
+            angles = np.linspace(0, 2*np.pi, num_segments, endpoint=False)
+            
+            # Círculo en punto 1
+            vertices_p1 = []
+            for angle in angles:
+                v = p1 + radius * (perp1 * np.cos(angle) + perp2 * np.sin(angle))
+                vertices_p1.append(v)
+            
+            # Círculo en punto 2
+            vertices_p2 = []
+            for angle in angles:
+                v = p2 + radius * (perp1 * np.cos(angle) + perp2 * np.sin(angle))
+                vertices_p2.append(v)
+            
+            vertices = vertices_p1 + vertices_p2
+            x_coords = [float(v[0]) for v in vertices]
+            y_coords = [float(v[1]) for v in vertices]
+            z_coords = [float(v[2]) for v in vertices]
+            
+            # Generar caras
+            faces_i, faces_j, faces_k = [], [], []
+            
+            # Caras laterales
+            for i in range(num_segments):
+                i_next = (i + 1) % num_segments
+                # Triángulo 1
+                faces_i.extend([i, i_next, i + num_segments])
+                faces_j.extend([i_next, i + num_segments, i_next + num_segments])
+                faces_k.extend([i + num_segments, i_next + num_segments, i])
+                
+                # Triángulo 2
+                faces_i.extend([i_next, i_next + num_segments, i])
+                faces_j.extend([i_next + num_segments, i, i_next])
+                faces_k.extend([i, i_next, i_next + num_segments])
+            
+            return go.Mesh3d(
+                x=x_coords, y=y_coords, z=z_coords,
+                i=faces_i, j=faces_j, k=faces_k,
+                opacity=0.75,
+                color=color,
+                name="",
+                showlegend=False,
+                hoverinfo='skip'
+            )
+        except Exception as e:
+            st.warning(f"Error dibujando cilindro: {str(e)}")
+            return None
     
     # Dibujar dedos con cilindros volumétricos
     for finger in hand.fingers:
