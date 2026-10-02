@@ -137,7 +137,7 @@ if "u_idx" not in st.session_state:
     st.session_state._cached_fig = None
 
 # ============ LAYOUT PRINCIPAL ============
-col_left, col_right = st.columns([2.5, 1])
+col_left, col_right = st.columns([3.5, 1])
 
 # ============ COLUMNA IZQUIERDA: VISTA 3D ============
 with col_left:
@@ -450,39 +450,35 @@ with col_right:
     st.divider()
     
     # === TELEMETRÍA EN TIEMPO REAL ===
-    st.write("**📊 Telemetría Actual:**")
+    st.write("**📊 Telemetría:**", help="Estado actual de servos y articulaciones")
     
     hand_telemetry = hand.get_telemetry()
     
-    # PWM Servos
-    col_pwm1, col_pwm2 = st.columns(2)
-    
-    with col_pwm1:
-        pwm_idx = hand_telemetry["actuators"]["servo_index"]["pwm_us"]
-        st.metric("PWM S1", f"{pwm_idx:.0f} µs", 
-                 delta=f"{(pwm_idx - 1000):.0f} offset" if pwm_idx != 1000 else "MIN")
-    
-    with col_pwm2:
-        pwm_grp = hand_telemetry["actuators"]["servo_group"]["pwm_us"]
-        st.metric("PWM S2", f"{pwm_grp:.0f} µs",
-                 delta=f"{(pwm_grp - 1000):.0f} offset" if pwm_grp != 1000 else "MIN")
-    
+    # PWM Servos - Compacto
+    pwm_idx = hand_telemetry["actuators"]["servo_index"]["pwm_us"]
+    pwm_grp = hand_telemetry["actuators"]["servo_group"]["pwm_us"]
     pwm_thb = hand_telemetry["actuators"]["servo_thumb"]["pwm_us"]
-    st.metric("PWM S3", f"{pwm_thb:.0f} µs",
-             delta=f"{(pwm_thb - 1000):.0f} offset" if pwm_thb != 1000 else "MIN")
+    
+    col_pwm1, col_pwm2, col_pwm3 = st.columns(3)
+    with col_pwm1:
+        st.metric("S1", f"{pwm_idx:.0f}µs", label_visibility="collapsed")
+    with col_pwm2:
+        st.metric("S2", f"{pwm_grp:.0f}µs", label_visibility="collapsed")
+    with col_pwm3:
+        st.metric("S3", f"{pwm_thb:.0f}µs", label_visibility="collapsed")
     
     st.divider()
     
-    # Ángulos articulares
-    st.write("**🔄 Ángulos Articulares (grados):**")
+    # Ángulos articulares - Formato compacto
+    st.write("**🔄 Ángulos:**", help="MCP y PIP por dedo")
     
     for finger_name, angles in hand_telemetry["joints"].items():
-        with st.expander(f"📍 {finger_name}", expanded=(finger_name=="Índice")):
+        with st.expander(f"{finger_name}: {angles['mcp_deg']:.1f}° / {angles['pip_deg']:.1f}°", expanded=False):
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("MCP Base", f"{angles['mcp_deg']:.1f}°")
+                st.metric("MCP", f"{angles['mcp_deg']:.1f}°", label_visibility="collapsed")
             with col2:
-                st.metric("PIP Medio", f"{angles['pip_deg']:.1f}°")
+                st.metric("PIP", f"{angles['pip_deg']:.1f}°", label_visibility="collapsed")
 
 # ============ SECCIÓN INFERIOR: INFORMACIÓN ============
 st.divider()
