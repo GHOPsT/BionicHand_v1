@@ -133,6 +133,8 @@ if "u_idx" not in st.session_state:
     st.session_state.u_idx = 0.0
     st.session_state.u_grp = 0.0
     st.session_state.u_thb = 0.0
+    st.session_state._last_fig_update = None
+    st.session_state._cached_fig = None
 
 # ============ LAYOUT PRINCIPAL ============
 col_left, col_right = st.columns([2.5, 1])
@@ -430,14 +432,20 @@ with col_right:
     # === SLIDERS DE CONTROL ===
     st.write("**Control Manual (0-100%):**")
     
-    u_idx_new = st.slider("S1: Índice", 0.0, 1.0, st.session_state.u_idx, 0.01, key="slider_idx")
-    u_grp_new = st.slider("S2: Grupo", 0.0, 1.0, st.session_state.u_grp, 0.01, key="slider_grp")
-    u_thb_new = st.slider("S3: Pulgar", 0.0, 1.0, st.session_state.u_thb, 0.01, key="slider_thb")
+    # Usar callbacks para actualizacion inmediata
+    def update_slider_idx():
+        st.session_state.u_idx = st.session_state.slider_idx_input
+    def update_slider_grp():
+        st.session_state.u_grp = st.session_state.slider_grp_input
+    def update_slider_thb():
+        st.session_state.u_thb = st.session_state.slider_thb_input
     
-    # Actualizar estado
-    st.session_state.u_idx = u_idx_new
-    st.session_state.u_grp = u_grp_new
-    st.session_state.u_thb = u_thb_new
+    st.slider("S1: Índice", 0.0, 1.0, st.session_state.u_idx, 0.01, 
+              key="slider_idx_input", on_change=update_slider_idx)
+    st.slider("S2: Grupo", 0.0, 1.0, st.session_state.u_grp, 0.01, 
+              key="slider_grp_input", on_change=update_slider_grp)
+    st.slider("S3: Pulgar", 0.0, 1.0, st.session_state.u_thb, 0.01, 
+              key="slider_thb_input", on_change=update_slider_thb)
     
     st.divider()
     
