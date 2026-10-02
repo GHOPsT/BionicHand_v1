@@ -88,49 +88,87 @@ with col_left:
         "Meñique": "#8b5cf6"
     }
     
-    # Dibujar dedos
+    # Función auxiliar para dibujar cilindro (falange)
+    def draw_cylinder(fig, p_base, p_end, radius, color, name):
+        """Dibuja un cilindro entre dos puntos usando scatter 3D"""
+        # Posiciones intermedias para simular cilindro
+        segments = 5
+        for i in range(segments):
+            t = i / segments
+            x = p_base[0] + (p_end[0] - p_base[0]) * t
+            y = p_base[1] + (p_end[1] - p_base[1]) * t
+            z = p_base[2] + (p_end[2] - p_base[2]) * t
+            
+            fig.add_trace(go.Scatter3d(
+                x=[x], y=[y], z=[z],
+                mode='markers',
+                marker=dict(size=radius*1.5, color=color, opacity=0.7),
+                name=name if i == 0 else "",
+                showlegend=(i == 0),
+                hoverinfo='skip'
+            ))
+    
+    # Dibujar dedos con cilindros volumétricos
     for finger in hand.fingers:
-        pts = finger.get_positions()
+        pts = finger.get_positions()  # [P0_base, P1_knuckle, P2_tip]
         color = colors_map[finger.name]
         
-        # Línea esquelética
+        # Línea esquelética principal (en Z=0 para vista frontal)
         fig_3d.add_trace(go.Scatter3d(
-            x=pts[:, 0], y=pts[:, 1], z=[10, 10, 10],
+            x=pts[:, 0], 
+            y=pts[:, 1], 
+            z=[0, 0, 0],
             mode='lines+markers',
             name=f"{finger.name} ({finger.mcp.angle:.1f}°)",
-            line=dict(color=color, width=6),
-            marker=dict(size=6, color=color),
+            line=dict(color=color, width=8),
+            marker=dict(size=8, color=color),
             hovertemplate=f"{finger.name}<br>MCP: {finger.mcp.angle:.1f}°<br>PIP: {finger.pip.angle:.1f}°<extra></extra>"
+        ))
+        
+        # Esferas en articulaciones
+        fig_3d.add_trace(go.Scatter3d(
+            x=pts[:, 0], 
+            y=pts[:, 1], 
+            z=[0, 0, 0],
+            mode='markers',
+            marker=dict(size=7, color=color, symbol='circle'),
+            showlegend=False,
+            hoverinfo='skip'
         ))
     
     # Palma simplificada
-    palm_origin = [0, 50, 10]
+    palm_origin = [0, 50, 0]
     fig_3d.add_trace(go.Scatter3d(
         x=[palm_origin[0]], y=[palm_origin[1]], z=[palm_origin[2]],
         mode='markers',
         name="Palma",
-        marker=dict(size=12, color='#d9d9d9'),
+        marker=dict(size=14, color='#d9d9d9', symbol='diamond'),
         hovertemplate="Palma<extra></extra>"
     ))
     
     # Configuración de la vista 3D
     fig_3d.update_layout(
-        title="Mano Biónica — Control Cinemático Directo",
+        title="🤖 Mano Biónica — Visualización 3D Interactiva",
         scene=dict(
-            xaxis=dict(title="X (mm)", range=[-60, 100]),
-            yaxis=dict(title="Y (mm)", range=[-80, 100]),
-            zaxis=dict(title="Z (mm)", range=[-20, 50]),
+            xaxis=dict(title="X (mm)", range=[-60, 100], backgroundcolor="rgb(20,20,20)"),
+            yaxis=dict(title="Y (mm)", range=[-20, 100], backgroundcolor="rgb(20,20,20)"),
+            zaxis=dict(title="Z (mm)", range=[-30, 30], backgroundcolor="rgb(20,20,20)"),
             camera=dict(
-                eye=dict(x=1.5, y=1.5, z=1.3)
-            )
+                eye=dict(x=1.2, y=1.5, z=1.2),
+                center=dict(x=0, y=0, z=0)
+            ),
+            aspectmode='data'
         ),
         hovermode='closest',
-        height=600,
+        height=650,
+        width=None,
         showlegend=True,
-        template="plotly_dark"
+        template="plotly_dark",
+        font=dict(size=11),
+        margin=dict(l=0, r=0, b=0, t=40)
     )
     
-    st.plotly_chart(fig_3d, use_container_width=False)
+    st.plotly_chart(fig_3d, use_container_width=True)
 
 # ============ COLUMNA DERECHA: CONTROLES ============
 with col_right:
@@ -142,7 +180,7 @@ with col_right:
     pose_cols = st.columns(2, gap="small")
     
     with pose_cols[0]:
-        if st.button("🖐️ Abierta", use_container_width=False, key="pose_open"):
+        if st.button("🖐️ Abierta", use_container_width=True, key="pose_open"):
             p = POSE_ACTUATOR_MAP[Pose.OPEN_HAND]
             st.session_state.u_idx = p["index"]
             st.session_state.u_grp = p["group"]
@@ -150,7 +188,7 @@ with col_right:
             st.rerun()
     
     with pose_cols[1]:
-        if st.button("✊ Puño", use_container_width=False, key="pose_power"):
+        if st.button("✊ Puño", use_container_width=True, key="pose_power"):
             p = POSE_ACTUATOR_MAP[Pose.POWER_GRASP]
             st.session_state.u_idx = p["index"]
             st.session_state.u_grp = p["group"]
@@ -160,7 +198,7 @@ with col_right:
     pose_cols2 = st.columns(2, gap="small")
     
     with pose_cols2[0]:
-        if st.button("✌️ Pinza", use_container_width=False, key="pose_pinch"):
+        if st.button("✌️ Pinza", use_container_width=True, key="pose_pinch"):
             p = POSE_ACTUATOR_MAP[Pose.PINCH_GRIP]
             st.session_state.u_idx = p["index"]
             st.session_state.u_grp = p["group"]
@@ -168,7 +206,7 @@ with col_right:
             st.rerun()
     
     with pose_cols2[1]:
-        if st.button("☝️ Señalar", use_container_width=False, key="pose_point"):
+        if st.button("☝️ Señalar", use_container_width=True, key="pose_point"):
             p = POSE_ACTUATOR_MAP[Pose.POINTING]
             st.session_state.u_idx = p["index"]
             st.session_state.u_grp = p["group"]
