@@ -144,71 +144,85 @@ class Hand3DCanvas(FigureCanvas):
         self.ax.add_collection3d(palm_poly)
     
     def draw_finger_3d(self, finger, finger_name):
-        """Dibuja un dedo como cilindros 3D con esferas articulares."""
-        pts_2d = finger.get_positions()  # (3, 2): [x, y]
+        """Dibuja un dedo con geometría 3D idéntica a visualizer.py."""
+        from config.dimensions import (
+            FINGER_DIMENSIONS, JOINT_LIMITS, COUPLING_RATIO_4BAR, PALM_SPACING
+        )
         
-        # Mapeo de nombres españoles a ingleses
-        name_to_key = {
+        # Obtener dimensiones del dedo
+        name_key = {
             "Pulgar": "thumb",
-            "Índice": "index",
+            "Índice": "index", 
             "Medio": "middle",
             "Anular": "ring",
             "Meñique": "pinky"
-        }
-        finger_key = name_to_key.get(finger_name, "index")
+        }[finger_name]
         
-        # Convertir a 3D - usar lógica similar a visualizer.py
+        d = FINGER_DIMENSIONS[name_key]
+        l1, l2 = d["l1_proximal"], d["l2_distal"]
+        
         if finger_name == "Pulgar":
-            # Pulgar tiene oposición 3D
+            # ===== PULGAR CON OPOSICIÓN 3D =====
+            u = self.hand.servo_thumb.command
+            mcp_max = JOINT_LIMITS["thumb_base_flexion"][1]
+            pip_max = JOINT_LIMITS["thumb_pip_flexion"][1]
+            t1_deg = u * mcp_max
+            t2_deg = u * 0.90 * pip_max
+            
+            t1 = np.radians(t1_deg)
+            phi = np.radians(t1_deg + t2_deg)
             origin = np.array([-12.0, 20.0, 9.0])
-            theta1 = np.radians(finger.mcp.angle)
             
-            # Primera falange con oposición
+            # Vector oposición 3D
             v1 = np.array([
-                -finger.l1 * np.cos(theta1) * 0.7 + 0.6 * finger.l1 * np.sin(theta1),
-                 finger.l1 * np.cos(theta1) * 0.7 - 0.2 * finger.l1 * np.sin(theta1),
-                 finger.l1 * 0.2 + finger.l1 * np.sin(theta1) * 0.8
+                -l1 * np.cos(t1) * 0.7 + 0.6 * l1 * np.sin(t1),
+                 l1 * np.cos(t1) * 0.7 - 0.2 * l1 * np.sin(t1),
+                 l1 * 0.2 + l1 * np.sin(t1) * 0.8
             ])
-            p0 = origin
             p1 = origin + v1
             
             # Segunda falange
-            theta2 = np.radians(finger.pip.angle)
-            phi = theta1 + theta2
             v2 = np.array([
-                -finger.l2 * 0.5 * np.cos(phi) + 0.7 * finger.l2 * np.sin(phi),
-                 finger.l2 * 0.5 * np.cos(phi) - 0.2 * finger.l2 * np.sin(phi),
-                 finger.l2 * 0.2 + finger.l2 * np.sin(phi) * 0.6
+                -l2 * 0.5 * np.cos(phi) + 0.7 * l2 * np.sin(phi),
+                 l2 * np.cos(phi) * 0.6 - 0.4 * l2 * np.sin(phi),
+                 l2 * 0.2 + l2 * np.sin(phi) * 0.9
             ])
             p2 = p1 + v2
-        else:
-            # Dedos normales - usar origen del finger
-            origin = np.array([finger.origin[0], finger.origin[1], 0.0])
-            theta1 = np.radians(finger.mcp.angle)
-            theta2 = np.radians(finger.pip.angle)
             
-            # Primera falange (sigue la cinemática del dedo)
-            v1 = np.array([
-                finger.l1 * np.sin(theta1),
-                -finger.l1 * np.cos(theta1),
-                0.0
-            ])
-            p0 = origin
-            p1 = origin + v1
-            
-            # Segunda falange
-            phi = theta1 + theta2
-            v2 = np.array([
-                finger.l2 * np.sin(phi),
-                -finger.l2 * np.cos(phi),
-                0.0
-            ])
-            p2 = p1 + v2
+            pts = np.array([origin, p1, p2])
         
-        pts = np.array([p0, p1, p2])
+        else:
+            # ===== DEDOS NORMALES (Índice, Medio, Anular, Meñique) =====
+            u = self.hand.servo_index.command if finger_name == "Índice" else self.hand.servo_group.command
+            mcp_max = JOINT_LIMITS["mcp_base_flexion"][1]
+            pip_max = JOINT_LIMITS["pip_middle_flexion"][1]
+            t1_deg = u * mcp_max
+            t2_deg = u * COUPLING_RATIO_4BAR * pip_max
+            
+            t1 = np.radians(t1_deg)
+            phi = np.radians(t1_deg + t2_deg)
+            
+            # Origen en la base de cada dedo en la palma
+            x_offsets = {
+                "Índice": 0.0,
+                "Medio": PALM_SPACING["index_to_middle"],
+                "Anular": PALM_SPACING["index_to_middle"] + PALM_SPACING["middle_to_ring"],
+                "Meñique": PALM_SPACING["index_to_middle"] + PALM_SPACING["middle_to_ring"] + PALM_SPACING["ring_to_pinky"]
+            }
+            y_offsets = {"Índice": 68.0, "Medio": 72.0, "Anular": 69.0, "Meñique": 62.0}
+            origin = np.array([x_offsets[finger_name], y_offsets[finger_name], 0.0])
+            
+            # Flexión: hacia adelante (+Z) y cierre hacia atrás (-Y)
+            # p1 = origin + [0, l1*cos(t1), l1*sin(t1)]
+            # p2 = p1 + [0, l2*cos(phi), l2*sin(phi)]
+            p1 = origin + np.array([0.0, l1 * np.cos(t1), l1 * np.sin(t1)])
+            p2 = p1 + np.array([0.0, l2 * np.cos(phi), l2 * np.sin(phi)])
+            
+            pts = np.array([origin, p1, p2])
+        
         c = self.colors[finger_name]
         
-        # Dibujar cilindros
+        # Dibujar cilindros entre articulaciones
         if len(pts) >= 3:
             self._draw_cylinder(pts[0], pts[1], self.cylinder_radius_proximal, 
                               c["main"], self.alpha_cylinders)
@@ -219,6 +233,7 @@ class Hand3DCanvas(FigureCanvas):
             self._draw_sphere(pts[0], self.sphere_radius_base, c["joint"], self.alpha_joints)
             self._draw_sphere(pts[1], self.sphere_radius_joint, c["joint"], self.alpha_joints)
             self._draw_sphere(pts[2], self.sphere_radius_tip, c["pad"], self.alpha_tips)
+
     
     def _draw_cylinder(self, p1: np.ndarray, p2: np.ndarray, radius: float, color: str, alpha: float):
         """Dibuja un cilindro volumétrico entre dos puntos."""
