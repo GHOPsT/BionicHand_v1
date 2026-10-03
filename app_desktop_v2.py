@@ -28,10 +28,11 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from core.hand import BionicHand
 from control.hand_tracking import HandTrackingThread, HandTracker
 from control.poses import HAND_POSES
+from config.dimensions import FINGER_DIMENSIONS, JOINT_LIMITS, COUPLING_RATIO_4BAR
 
 
 class Hand3DCanvas(FigureCanvas):
-    """Widget de Matplotlib para visualización 3D profesional de la mano."""
+    """Widget de Matplotlib para visualización 3D profesional de la mano (como visualizer.py)."""
     
     def __init__(self, parent=None, width=6, height=5, dpi=100):
         self.fig = Figure(figsize=(width, height), dpi=dpi, facecolor='#1e222b')
@@ -41,35 +42,47 @@ class Hand3DCanvas(FigureCanvas):
         
         self.hand = BionicHand()
         
-        # Colores por dedo (similar a main.py)
+        # Colores profesionales por dedo (match visualizer.py)
         self.colors = {
-            "Pulgar":  "#ef4444",
-            "Índice":  "#3b82f6",
-            "Medio":   "#10b981",
-            "Anular":  "#f59e0b",
-            "Meñique": "#8b5cf6"
+            "Pulgar":  {"main": "#ef4444", "joint": "#b91c1c", "pad": "#fca5a5"},
+            "Índice":  {"main": "#3b82f6", "joint": "#1d4ed8", "pad": "#93c5fd"},
+            "Medio":   {"main": "#10b981", "joint": "#047857", "pad": "#6ee7b7"},
+            "Anular":  {"main": "#f59e0b", "joint": "#b45309", "pad": "#fde68a"},
+            "Meñique": {"main": "#8b5cf6", "joint": "#6d28d9", "pad": "#c4b5fd"}
         }
         
-        self.finger_names = ["Índice", "Medio", "Anular", "Meñique", "Pulgar"]
+        self.finger_names = ["Pulgar", "Índice", "Medio", "Anular", "Meñique"]
+        
+        # Parámetros de visualización
+        self.cylinder_radius_proximal = 4.5
+        self.cylinder_radius_distal = 4.0
+        self.sphere_radius_base = 3.5
+        self.sphere_radius_joint = 3.0
+        self.sphere_radius_tip = 4.5
+        self.alpha_cylinders = 0.88
+        self.alpha_joints = 0.92
+        self.alpha_tips = 0.85
+        
         self.setup_plot()
     
     def setup_plot(self):
         """Configura la visualización 3D inicial."""
-        self.ax.set_xlabel('X (mm)', color='#e2e8f0', fontsize=9)
-        self.ax.set_ylabel('Y (mm)', color='#e2e8f0', fontsize=9)
-        self.ax.set_zlabel('Z (mm)', color='#e2e8f0', fontsize=9)
+        self.ax.set_xlabel('X (mm) [Transversal]', color='#94a3b8', fontsize=8)
+        self.ax.set_ylabel('Y (mm) [Longitudinal]', color='#94a3b8', fontsize=8)
+        self.ax.set_zlabel('Z (mm) [Palmar]', color='#94a3b8', fontsize=8)
         self.ax.set_title('Mano Biónica 3D', fontsize=13, weight='bold', color='#e2e8f0')
         
-        # Límites de visualización
-        self.ax.set_xlim(-80, 120)
-        self.ax.set_ylim(-70, 70)
-        self.ax.set_zlim(-20, 100)
+        # Límites (similar a visualizer.py)
+        self.ax.set_xlim(-45, 85)
+        self.ax.set_ylim(-15, 160)
+        self.ax.set_zlim(-20, 85)
         
         # Estilo oscuro
         self.ax.xaxis.pane.fill = False
         self.ax.yaxis.pane.fill = False
         self.ax.zaxis.pane.fill = False
         self.ax.grid(True, alpha=0.2)
+        self.ax.tick_params(colors='#64748b', labelsize=7)
         
         self.fig.tight_layout()
     
@@ -78,35 +91,135 @@ class Hand3DCanvas(FigureCanvas):
         self.hand.set_actuators(u_index=u_index, u_group=u_group, u_thumb=u_thumb)
         self.ax.clear()
         
-        # Dibujar dedos con líneas y puntos
-        for i, finger in enumerate(self.hand.fingers):
-            self.draw_finger(finger, self.finger_names[i])
+        # Dibujar dedos con cilindros 3D
+        for i, finger_name in enumerate(self.finger_names):
+            finger = self.hand.fingers[i]
+            self.draw_finger_3d(finger, finger_name)
         
         self.setup_plot()
         self.draw()
     
-    def draw_finger(self, finger, finger_name):
-        """Dibuja un dedo como línea 3D con puntos de articulación."""
-        pts_2d = finger.get_positions()  # (3, 2): P0, P1, P2
+    def draw_finger_3d(self, finger, finger_name):
+        """Dibuja un dedo como cilindros 3D con esferas articulares."""
+        pts_2d = finger.get_positions()  # (3, 2): [x, y]
         
-        # Convertir a 3D con z pequeño
-        pts = np.column_stack([pts_2d, np.zeros(len(pts_2d))])
+        # Mapeo de nombres españoles a ingleses
+        name_to_key = {
+            "Pulgar": "thumb",
+            "Índice": "index",
+            "Medio": "middle",
+            "Anular": "ring",
+            "Meñique": "pinky"
+        }
+        finger_key = name_to_key.get(finger_name, "index")
         
-        # Línea del dedo con color
-        color = self.colors.get(finger_name, "#cccccc")
-        self.ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], 
-                    color=color, linewidth=4, alpha=0.8)
+        # Convertir a 3D - usar lógica similar a visualizer.py
+        if finger_name == "Pulgar":
+            # Pulgar tiene oposición 3D
+            origin = np.array([-12.0, 20.0, 9.0])
+            theta1 = np.radians(finger.mcp.angle)
+            
+            # Primera falange con oposición
+            v1 = np.array([
+                -finger.l1 * np.cos(theta1) * 0.7 + 0.6 * finger.l1 * np.sin(theta1),
+                 finger.l1 * np.cos(theta1) * 0.7 - 0.2 * finger.l1 * np.sin(theta1),
+                 finger.l1 * 0.2 + finger.l1 * np.sin(theta1) * 0.8
+            ])
+            p0 = origin
+            p1 = origin + v1
+            
+            # Segunda falange
+            theta2 = np.radians(finger.pip.angle)
+            phi = theta1 + theta2
+            v2 = np.array([
+                -finger.l2 * 0.5 * np.cos(phi) + 0.7 * finger.l2 * np.sin(phi),
+                 finger.l2 * 0.5 * np.cos(phi) - 0.2 * finger.l2 * np.sin(phi),
+                 finger.l2 * 0.2 + finger.l2 * np.sin(phi) * 0.6
+            ])
+            p2 = p1 + v2
+        else:
+            # Dedos normales - usar origen del finger
+            origin = np.array([finger.origin[0], finger.origin[1], 0.0])
+            theta1 = np.radians(finger.mcp.angle)
+            theta2 = np.radians(finger.pip.angle)
+            
+            # Primera falange (sigue la cinemática del dedo)
+            v1 = np.array([
+                finger.l1 * np.sin(theta1),
+                -finger.l1 * np.cos(theta1),
+                0.0
+            ])
+            p0 = origin
+            p1 = origin + v1
+            
+            # Segunda falange
+            phi = theta1 + theta2
+            v2 = np.array([
+                finger.l2 * np.sin(phi),
+                -finger.l2 * np.cos(phi),
+                0.0
+            ])
+            p2 = p1 + v2
         
-        # Puntos de articulación
-        self.ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], 
-                       color=color, s=80, alpha=0.9, edgecolors='white', linewidth=1)
+        pts = np.array([p0, p1, p2])
+        c = self.colors[finger_name]
+        
+        # Dibujar cilindros
+        if len(pts) >= 3:
+            self._draw_cylinder(pts[0], pts[1], self.cylinder_radius_proximal, 
+                              c["main"], self.alpha_cylinders)
+            self._draw_cylinder(pts[1], pts[2], self.cylinder_radius_distal, 
+                              c["main"], self.alpha_cylinders)
+            
+            # Esferas articulares
+            self._draw_sphere(pts[0], self.sphere_radius_base, c["joint"], self.alpha_joints)
+            self._draw_sphere(pts[1], self.sphere_radius_joint, c["joint"], self.alpha_joints)
+            self._draw_sphere(pts[2], self.sphere_radius_tip, c["pad"], self.alpha_tips)
     
-    def draw_palm(self):
-        """Dibuja la palma (opcional)."""
-        # Centro de palma
-        palm_center = np.array([0, 0, 0])
-        self.ax.scatter(*palm_center, color='#14b8a6', s=200, alpha=0.6, 
-                       edgecolors='white', linewidth=1)
+    def _draw_cylinder(self, p1: np.ndarray, p2: np.ndarray, radius: float, color: str, alpha: float):
+        """Dibuja un cilindro volumétrico entre dos puntos."""
+        axis = p2 - p1
+        axis_len = np.linalg.norm(axis)
+        if axis_len == 0:
+            return
+        
+        axis = axis / axis_len
+        
+        # Vectores perpendiculares
+        if abs(axis[0]) < 0.9:
+            perp1 = np.array([0, -axis[2], axis[1]])
+        else:
+            perp1 = np.array([-axis[1], axis[0], 0])
+        perp1 = perp1 / np.linalg.norm(perp1)
+        perp2 = np.cross(axis, perp1)
+        
+        # Círculos en los extremos
+        angles = np.linspace(0, 2*np.pi, 12)
+        circle1 = p1[:, None] + radius * (perp1[:, None] * np.cos(angles) + perp2[:, None] * np.sin(angles))
+        circle2 = p2[:, None] + radius * (perp1[:, None] * np.cos(angles) + perp2[:, None] * np.sin(angles))
+        
+        # Crear caras laterales
+        faces = []
+        for i in range(len(angles)-1):
+            face = [circle1[:, i].tolist(), circle1[:, i+1].tolist(), 
+                   circle2[:, i+1].tolist(), circle2[:, i].tolist()]
+            faces.append(face)
+        
+        # Tapas
+        faces.append(circle1.T.tolist())
+        faces.append(circle2.T.tolist())
+        
+        cyl = Poly3DCollection(faces, alpha=alpha, facecolor=color, edgecolor='#0f172a', linewidths=0.5)
+        self.ax.add_collection3d(cyl)
+    
+    def _draw_sphere(self, center: np.ndarray, radius: float, color: str, alpha: float):
+        """Dibuja una esfera 3D."""
+        u = np.linspace(0, 2 * np.pi, 8)
+        v = np.linspace(0, np.pi, 6)
+        x = radius * np.outer(np.cos(u), np.sin(v)) + center[0]
+        y = radius * np.outer(np.sin(u), np.sin(v)) + center[1]
+        z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) + center[2]
+        self.ax.plot_surface(x, y, z, color=color, alpha=alpha, edgecolor='#ffffff', linewidth=0.3)
 
 
 class CameraFrame(QFrame):

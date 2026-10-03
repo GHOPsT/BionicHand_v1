@@ -18,7 +18,7 @@ class HandTracker:
 
     def __init__(self, max_hands=1, confidence=0.7):
         """
-        Inicializa el rastreador de mano.
+        Inicializa el rastreador de mano con rangos HSV mejorados.
         
         Args:
             max_hands: Número máximo de manos a detectar
@@ -26,19 +26,28 @@ class HandTracker:
         """
         self.confidence = confidence
         
-        # Rango HSV MEJORADO para detectar piel en diferentes iluminaciones
-        # H: 0-20 (rojo oscuro) y 170-180 (rojo) para tonos cálidos
-        # S: 10-255 (desde muy desaturado a muy saturado)
-        # V: 40-255 (desde oscuro a brillante)
-        self.lower_skin_1 = np.array([0, 10, 40], dtype=np.uint8)
-        self.upper_skin_1 = np.array([20, 255, 255], dtype=np.uint8)
+        # RANGOS HSV MEJORADOS para detectar piel en diferentes iluminaciones
+        # Basados en análisis de rango de valores de piel humana
         
-        self.lower_skin_2 = np.array([170, 10, 40], dtype=np.uint8)
-        self.upper_skin_2 = np.array([180, 255, 255], dtype=np.uint8)
+        # Rango 1: Tonos cálidos claros (piel clara/media)
+        # H: 0-20 (rojo-naranja), S: 15-170, V: 60-255
+        self.lower_skin_1 = np.array([0, 15, 60], dtype=np.uint8)
+        self.upper_skin_1 = np.array([20, 170, 255], dtype=np.uint8)
         
-        # Para más compatibilidad: agregar rango de tonos más oscuros/claros
+        # Rango 2: Tonos rojo oscuro (piel oscura)
+        # H: 170-180, S: 15-170, V: 40-255
+        self.lower_skin_2 = np.array([170, 15, 40], dtype=np.uint8)
+        self.upper_skin_2 = np.array([180, 170, 255], dtype=np.uint8)
+        
+        # Rango 3: Tonos más naturales/desaturados
+        # H: 5-25, S: 20-180, V: 50-220
         self.lower_skin_3 = np.array([5, 20, 50], dtype=np.uint8)
-        self.upper_skin_3 = np.array([25, 240, 210], dtype=np.uint8)
+        self.upper_skin_3 = np.array([25, 180, 220], dtype=np.uint8)
+        
+        # Rango 4: Tonos más saturados (piel bronceada)
+        # H: 0-30, S: 30-255, V: 50-255
+        self.lower_skin_4 = np.array([0, 30, 50], dtype=np.uint8)
+        self.upper_skin_4 = np.array([30, 255, 255], dtype=np.uint8)
 
     def process_frame(self, frame: np.ndarray) -> Tuple[Optional[Dict], np.ndarray]:
         """
@@ -50,8 +59,7 @@ class HandTracker:
         Returns:
             (hand_data, annotated_frame)
         """
-        # Aplicar CLAHE (Contrast Limited Adaptive Histogram Equalization)
-        # para mejorar contraste en diferentes iluminaciones
+        # Aplicar CLAHE para mejorar contraste
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         gray = clahe.apply(gray)
@@ -59,14 +67,16 @@ class HandTracker:
         # Convertir a HSV
         hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         
-        # Detectar piel con MÚLTIPLES rangos
+        # Detectar piel con MÚLTIPLES rangos (4 en total)
         mask1 = cv2.inRange(hsv_frame, self.lower_skin_1, self.upper_skin_1)
         mask2 = cv2.inRange(hsv_frame, self.lower_skin_2, self.upper_skin_2)
         mask3 = cv2.inRange(hsv_frame, self.lower_skin_3, self.upper_skin_3)
+        mask4 = cv2.inRange(hsv_frame, self.lower_skin_4, self.upper_skin_4)
         
-        # Combinar máscaras
+        # Combinar todas las máscaras
         mask = cv2.bitwise_or(mask1, mask2)
         mask = cv2.bitwise_or(mask, mask3)
+        mask = cv2.bitwise_or(mask, mask4)
         
         # Morfología agresiva para limpiar ruido
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
@@ -89,8 +99,8 @@ class HandTracker:
             area = cv2.contourArea(largest_contour)
             
             h, w = frame.shape[:2]
-            min_area = (w * h) * 0.01  # Mínimo 1% del frame (menos restrictivo)
-            max_area = (w * h) * 0.8   # Máximo 80% del frame
+            min_area = (w * h) * 0.01  # Mínimo 1% del frame
+            max_area = (w * h) * 0.9   # Máximo 90% del frame
             
             if min_area < area < max_area:
                 hand_data["detected"] = True
@@ -101,7 +111,7 @@ class HandTracker:
                 hull = cv2.convexHull(largest_contour)
                 hull_area = cv2.contourArea(hull)
                 
-                # Solidity (compactness) - qué tan "sólida" es la forma
+                # Solidity (compactness)
                 solidity = area / hull_area if hull_area > 0 else 0
                 
                 # Perímetro
@@ -124,25 +134,18 @@ class HandTracker:
                 cv2.drawContours(annotated_frame, [largest_contour], 0, (0, 255, 0), 2)
                 cv2.drawContours(annotated_frame, [hull], 0, (255, 0, 0), 2)
                 
-                # Estimar dedos por proporciones del contorno
-                # Un dedo "puro" tiene perímetro-a-área ratio característico
-                aspect_ratio = perimeter ** 2 / (4 * np.pi * area) if area > 0 else 0
-                
-                # Contour approximation para ver vértices
-                epsilon = 0.03 * perimeter
+                # Contour approximation para contar dedos
+                epsilon = 0.02 * perimeter  # Tolerancia más pequeña
                 approx = cv2.approxPolyDP(largest_contour, epsilon, True)
                 
-                # Número de vértices ≈ número de dedos
+                # Número de vértices ÷ 2.5 ≈ número de dedos
                 finger_count = len(approx)
-                
-                # Normalizar a rango 0-5
-                finger_count = max(1, min(finger_count // 3, 5))
+                finger_count = max(1, min(int(finger_count / 2.5), 5))
                 
                 hand_data["finger_count"] = finger_count
                 hand_data["hand_area"] = area
                 hand_data["solidity"] = solidity
                 hand_data["perimeter"] = perimeter
-                hand_data["aspect_ratio"] = aspect_ratio
         
         return hand_data, annotated_frame
 
