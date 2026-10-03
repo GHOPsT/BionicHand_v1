@@ -544,13 +544,13 @@ class BionicHandDesktopApp(QMainWindow):
         self.hand_3d.update_hand_position(self.u_index, self.u_group, self.u_thumb)
     
     def update_ui(self):
-        """Loop principal de actualización."""
+        """Loop principal de actualización cada 30ms."""
         # Obtener frame de cámara
         frame = self.camera_thread.get_frame()
         hand_data = self.camera_thread.get_hand_data()
         
         if frame is not None and self.mode in ["CÁMARA", "GESTOS"]:
-            # Mostrar frame
+            # Mostrar frame de cámara
             self.camera_display.update_frame(frame)
             
             # Procesar datos de mano
@@ -558,7 +558,7 @@ class BionicHandDesktopApp(QMainWindow):
                 self.hand_status_label.setText("✓ Mano detectada")
                 self.hand_status_label.setStyleSheet("color: #51cf66; font-weight: bold;")
                 
-                # En modo CÁMARA: mapear hand_data a servo values
+                # En modo CÁMARA: mapear hand_data a servo values continuamente
                 if self.mode == "CÁMARA":
                     servo_vals = self.tracker.landmarks_to_servo_values(hand_data)
                     self.u_index = servo_vals.get("u_index", 0.0)
@@ -568,12 +568,14 @@ class BionicHandDesktopApp(QMainWindow):
                     # Mostrar gesture detectado
                     gesture = self.tracker.detect_gesture(hand_data)
                     self.hand_info_label.setText(f"Gesto: {gesture}")
-                    
-                    self.update_hand_visualization()
             else:
                 self.hand_status_label.setText("✗ Mano no detectada")
                 self.hand_status_label.setStyleSheet("color: #ff6b6b; font-weight: bold;")
                 self.hand_info_label.setText("")
+        
+        # Actualizar visualización 3D SIEMPRE (modo CÁMARA y SLIDERS)
+        if self.mode in ["CÁMARA", "GESTOS"]:
+            self.update_hand_visualization()
 
 
 def main():

@@ -197,26 +197,70 @@ class HandTracker:
 
     def landmarks_to_servo_values(self, landmarks: Dict) -> Dict[str, float]:
         """
-        Mapea datos de mano a valores de servomotor.
+        Mapea datos de mano a valores de servomotor con transiciones suaves.
         
         Args:
-            landmarks: Diccionario de datos de mano
+            landmarks: Diccionario de datos de mano con finger_count y solidity
             
         Returns:
-            Valores normalizados: {u_index, u_group, u_thumb}
+            Valores normalizados suavizados: {u_index, u_group, u_thumb} (0.0-1.0)
         """
-        gesture = self.detect_gesture(landmarks)
+        finger_count = landmarks.get("finger_count", 0)
+        solidity = landmarks.get("solidity", 0.5)
+        perimeter = landmarks.get("perimeter", 0)
         
-        # Mapear gestos a valores servo
-        gesture_servo_map = {
-            "FIST": {"u_index": 0.95, "u_group": 0.95, "u_thumb": 0.90},
-            "OPEN_PALM": {"u_index": 0.0, "u_group": 0.0, "u_thumb": 0.0},
-            "PINCH": {"u_index": 0.75, "u_group": 0.0, "u_thumb": 0.85},
-            "POINTING": {"u_index": 0.0, "u_group": 1.0, "u_thumb": 0.90},
-            "NEUTRAL": {"u_index": 0.4, "u_group": 0.3, "u_thumb": 0.3}
+        # Mapeo continuo basado en finger_count y solidity
+        # Idea: 
+        # - finger_count=0 (puño) → cerrado (0.9)
+        # - finger_count=5 (abierto) → abierto (0.0)
+        # - solidity > 0.65 → más cerrado
+        # - solidity < 0.55 → más abierto
+        
+        # Mapa lineal: finger_count → cierre relativo
+        # 0 dedos -> muy cerrado (0.95)
+        # 1 dedo -> cerrado (0.75)
+        # 2-3 dedos -> intermedio (0.5)
+        # 4-5 dedos -> abierto (0.1)
+        
+        finger_ratio = finger_count / 5.0  # Normalizar a 0-1
+        
+        # Base: mapeo inverso de finger_count
+        # Más dedos = más abierto (menos cierre)
+        base_closure = 1.0 - (finger_ratio * 0.95)  # Rango: 0.05 - 1.0
+        
+        # Ajustar por solidity
+        # Si solidity es muy alta (puño) -> más cierre
+        # Si solidity es muy baja (abierto) -> menos cierre
+        solidity_factor = (solidity - 0.4) / 0.3  # Normalizar solidity 0.4-0.7 a 0-1
+        solidity_factor = max(0.0, min(1.0, solidity_factor))  # Clamp 0-1
+        
+        # Combinar: base_closure ajustada por solidity
+        # Si solidity está alta, refuerza el cierre
+        # Si solidity está baja, refuerza la apertura
+        adjusted_closure = base_closure + (solidity_factor - 0.5) * 0.3
+        adjusted_closure = max(0.0, min(1.0, adjusted_closure))  # Clamp 0-1
+        
+        # Mapeo de dedos a servos específicos:
+        # Índice: sigue finger_count directamente
+        # Grupo (Medio, Anular, Meñique): similar pero con offset
+        # Pulgar: busca oposición (generalmente más cerrado)
+        
+        u_index = adjusted_closure  # 0-1 (0=abierto, 1=cerrado)
+        
+        # Grupo: similar al índice pero con un poco más de independencia
+        u_group = adjusted_closure * 0.95  # Ligeramente menos que índice
+        
+        # Pulgar: oposición constante con el índice
+        # Cuando índice está abierto (u_index=0) -> pulgar cerrado (0.9)
+        # Cuando índice está cerrado (u_index=1) -> pulgar abierto (0.2)
+        u_thumb = 0.9 - (u_index * 0.7)  # Rango: 0.2-0.9
+        
+        return {
+            "u_index": round(u_index, 2),
+            "u_group": round(u_group, 2),
+            "u_thumb": round(u_thumb, 2)
         }
-        
-        return gesture_servo_map.get(gesture, {"u_index": 0.0, "u_group": 0.0, "u_thumb": 0.0})
+
 
     def release(self):
         """Libera recursos."""
