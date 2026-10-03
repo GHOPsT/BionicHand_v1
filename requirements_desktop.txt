@@ -1,0 +1,28 @@
+# Requirements para BionicHand Desktop Application
+# Compatible con Python 3.13+
+# Incluye: MediaPipe, OpenCV, PyQt5, Matplotlib, etc.
+
+# === Core Python (Compatible 3.13) ===
+numpy>=2.0.0
+scipy>=1.14.0
+
+# === GUI Desktop ===
+PyQt5>=5.15.9
+
+# === Visualización 3D ===
+matplotlib>=3.8.0
+pyopengl>=3.1.7
+
+# === Captura de Cámara y Visión por Computadora ===
+opencv-python>=4.8.1
+mediapipe>=0.10.0
+
+# === Empaquetamiento a .exe ===
+pyinstaller>=5.13.2
+
+# === Utilidades ===
+Pillow>=10.0.0
+
+# === Opcional: Mejoras de Performance ===
+# numba==0.57.1  # JIT compilation para cálculos NumPy
+# scikit-image==0.21.0  # Procesamiento avanzado de imágenes
