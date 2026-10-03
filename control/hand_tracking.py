@@ -26,28 +26,24 @@ class HandTracker:
         """
         self.confidence = confidence
         
-        # RANGOS HSV MEJORADOS para detectar piel en diferentes iluminaciones
-        # Basados en análisis de rango de valores de piel humana
+        # RANGOS HSV CALIBRADOS para tu iluminación específica
+        # Valores optimizados mediante calibrate_hsv.py
         
-        # Rango 1: Tonos cálidos claros (piel clara/media)
-        # H: 0-20 (rojo-naranja), S: 15-170, V: 60-255
-        self.lower_skin_1 = np.array([0, 15, 60], dtype=np.uint8)
-        self.upper_skin_1 = np.array([20, 170, 255], dtype=np.uint8)
+        # Rango Calibrado Principal: H(0-23), S(45-158), V(127-211)
+        self.lower_skin_1 = np.array([0, 45, 127], dtype=np.uint8)
+        self.upper_skin_1 = np.array([23, 158, 211], dtype=np.uint8)
         
-        # Rango 2: Tonos rojo oscuro (piel oscura)
-        # H: 170-180, S: 15-170, V: 40-255
-        self.lower_skin_2 = np.array([170, 15, 40], dtype=np.uint8)
-        self.upper_skin_2 = np.array([180, 170, 255], dtype=np.uint8)
+        # Rango 2: Variación +/- 2 en H para capturar bordes
+        self.lower_skin_2 = np.array([0, 40, 120], dtype=np.uint8)
+        self.upper_skin_2 = np.array([25, 165, 220], dtype=np.uint8)
         
-        # Rango 3: Tonos más naturales/desaturados
-        # H: 5-25, S: 20-180, V: 50-220
-        self.lower_skin_3 = np.array([5, 20, 50], dtype=np.uint8)
-        self.upper_skin_3 = np.array([25, 180, 220], dtype=np.uint8)
+        # Rango 3: Sensibilidad extra en S (más permisivo)
+        self.lower_skin_3 = np.array([0, 35, 115], dtype=np.uint8)
+        self.upper_skin_3 = np.array([25, 170, 225], dtype=np.uint8)
         
-        # Rango 4: Tonos más saturados (piel bronceada)
-        # H: 0-30, S: 30-255, V: 50-255
-        self.lower_skin_4 = np.array([0, 30, 50], dtype=np.uint8)
-        self.upper_skin_4 = np.array([30, 255, 255], dtype=np.uint8)
+        # Rango 4: Más permisivo en V (capturar sombras)
+        self.lower_skin_4 = np.array([0, 45, 100], dtype=np.uint8)
+        self.upper_skin_4 = np.array([25, 160, 230], dtype=np.uint8)
 
     def process_frame(self, frame: np.ndarray) -> Tuple[Optional[Dict], np.ndarray]:
         """
