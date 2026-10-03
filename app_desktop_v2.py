@@ -91,6 +91,9 @@ class Hand3DCanvas(FigureCanvas):
         self.hand.set_actuators(u_index=u_index, u_group=u_group, u_thumb=u_thumb)
         self.ax.clear()
         
+        # Dibujar palma 3D
+        self.draw_palm_3d()
+        
         # Dibujar dedos con cilindros 3D
         for i, finger_name in enumerate(self.finger_names):
             finger = self.hand.fingers[i]
@@ -98,6 +101,47 @@ class Hand3DCanvas(FigureCanvas):
         
         self.setup_plot()
         self.draw()
+    
+    def draw_palm_3d(self):
+        """Dibuja la palma volumétrica 3D (igual a visualizer.py)."""
+        # Puntos superiores del dorso
+        top_pts = [
+            [-20.0, 45.0, 5],
+            [-25.0, 26.0, 8],
+            [-10.0, 50.0, 3],
+            [0, 68, 2],
+            [20.8, 72, 2],
+            [41.4, 69, 2],
+            [62.9, 62, 3],
+            [70.0, 40.0, 4],
+            [65.0, 15.0, 6],
+            [30.0, -5.0, 5],
+            [-15.0, -5.0, 5]
+        ]
+
+        # Puntos inferiores (lado de la palma, 12mm debajo)
+        bot_pts = [[p[0], p[1], p[2] - 12.0] for p in top_pts]
+
+        # Crear caras del volumen
+        faces = []
+        
+        # Tapa superior (dorso)
+        faces.append(top_pts)
+        
+        # Tapa inferior (palma)
+        faces.append(bot_pts)
+        
+        # Caras laterales
+        n = len(top_pts)
+        for i in range(n):
+            p_next = (i + 1) % n
+            face = [top_pts[i], top_pts[p_next], bot_pts[p_next], bot_pts[i]]
+            faces.append(face)
+
+        # Dibujar palma volumétrica
+        palm_poly = Poly3DCollection(faces, alpha=0.50, facecolor='#c8bda8', 
+                                    edgecolor='#6e6350', linewidths=1.5)
+        self.ax.add_collection3d(palm_poly)
     
     def draw_finger_3d(self, finger, finger_name):
         """Dibuja un dedo como cilindros 3D con esferas articulares."""
