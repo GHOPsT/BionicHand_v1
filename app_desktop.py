@@ -12,8 +12,7 @@ from PyQt5.QtWidgets import (
     QSpinBox, QCheckBox
 )
 from PyQt5.QtGui import QImage, QPixmap, QFont
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread
-from PyQt5.QtChart import QChart, QChartView, QLineSeries
+from PyQt5.QtCore import Qt, QTimer, QThread
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
@@ -66,7 +65,10 @@ class Hand3DCanvas(FigureCanvas):
     
     def draw_finger(self, finger):
         """Dibuja un dedo como cilindro 3D."""
-        pts = finger.get_positions()
+        pts_2d = finger.get_positions()  # Retorna (3, 2): [x, y]
+        
+        # Convertir a 3D agregando z=0
+        pts = np.column_stack([pts_2d, np.zeros(len(pts_2d))])
         
         # Línea del dedo
         self.ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], 'b-', linewidth=3)

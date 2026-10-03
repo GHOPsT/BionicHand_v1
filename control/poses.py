@@ -14,3 +14,11 @@ POSE_ACTUATOR_MAP: Dict[Pose, Dict[str, float]] = {
     Pose.PINCH_GRIP:  {"index": 0.75, "group": 0.00, "thumb": 0.85},
     Pose.POINTING:    {"index": 0.00, "group": 1.00, "thumb": 0.90}
 }
+
+# Diccionario simple de posturas para app_desktop.py
+HAND_POSES: Dict[str, tuple] = {
+    "OPEN": (0.00, 0.00, 0.00),      # Mano abierta
+    "FIST": (0.95, 0.95, 0.90),      # Puño cerrado
+    "PINCH": (0.75, 0.00, 0.85),     # Pinza fina
+    "POINTING": (0.00, 1.00, 0.90)   # Señalar
+}

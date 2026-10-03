@@ -15,7 +15,7 @@ pyopengl>=3.1.7
 
 # === Captura de Cámara y Visión por Computadora ===
 opencv-python>=4.8.1
-mediapipe>=0.10.0
+# MediaPipe removido - se usa OpenCV para detección de mano
 
 # === Empaquetamiento a .exe ===
 pyinstaller>=5.13.2
