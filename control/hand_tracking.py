@@ -43,8 +43,12 @@ class HandTracker:
         
         # Rango 4: MÃ¡s permisivo en V (capturar sombras)
         self.lower_skin_4 = np.array([0, 45, 100], dtype=np.uint8)
-        self.upper_skin_4 = np.array([25, 160, 230], dtype=np.uint8)
-
+        self.upper_skin_4 = np.array([25, 160, 230], dtype=np.uint8)        
+        # ===== CALIBRACIÓN DE ESQUELETO =====
+        # Se activa cuando se detecta la mano por primera vez
+        self.skeleton_calibrated = False
+        self.reference_landmarks = None  # Landmarks de calibración (referencia)
+        self.reference_distances = None  # Distancias de referencia (base a cada dedo)
     def process_frame(self, frame: np.ndarray) -> Tuple[Optional[Dict], np.ndarray]:
         """
         Procesa un fotograma para detectar la mano.
@@ -209,7 +213,131 @@ class HandTracker:
             landmarks.extend(extremes)
         
         return landmarks[:6]  # MÃ¡ximo 6 landmarks (base + 5 dedos)
+    def calibrate_hand_skeleton(self, landmarks_2d: List[Tuple[int, int]]) -> None:
+        """
+        Calibra el esqueleto de la mano memorizando los landmarks iniciales.
+        Se ejecuta una sola vez cuando se detecta la mano por primera vez.
+        
+        Args:
+            landmarks_2d: Lista de (x, y) detectados
+        """
+        if len(landmarks_2d) < 2:
+            return
+        
+        self.reference_landmarks = landmarks_2d.copy()
+        
+        # Calcular distancias de referencia (base a cada dedo)
+        base = np.array(landmarks_2d[0])
+        self.reference_distances = []
+        
+        for i in range(1, len(landmarks_2d)):
+            tip = np.array(landmarks_2d[i])
+            distance = np.linalg.norm(tip - base)
+            self.reference_distances.append(distance)
+        
+        self.skeleton_calibrated = True
+        print(f"✓ Esqueleto de mano calibrado con {len(self.reference_distances)} puntos de referencia")
 
+    def get_finger_closure_from_landmarks(self, landmarks_2d: List[Tuple[int, int]]) -> Dict[str, float]:
+        """
+        Calcula el cierre relativo de dedos usando el esqueleto calibrado.
+        
+        Usa distancias relativas: si distancia actual < distancia referencia → dedo más cerrado
+        
+        Args:
+            landmarks_2d: Landmarks detectados actualmente
+            
+        Returns:
+            {u_index, u_group, u_thumb} basado en cambios relativos
+        """
+        if not self.skeleton_calibrated or len(landmarks_2d) < 2:
+            return {"u_index": 0.5, "u_group": 0.5, "u_thumb": 0.5}
+        
+        base = np.array(landmarks_2d[0])
+        current_distances = []
+        
+        # Calcular distancias actuales
+        for i in range(1, len(landmarks_2d)):
+            if i < len(landmarks_2d):
+                tip = np.array(landmarks_2d[i])
+                distance = np.linalg.norm(tip - base)
+                current_distances.append(distance)
+            else:
+                current_distances.append(self.reference_distances[i-1])  # Usar referencia si no hay dato
+        
+        # Calcular ratio distancia actual / distancia referencia
+        # Ratio < 1.0 = dedo más cerca (más cerrado)
+        # Ratio > 1.0 = dedo más lejos (más abierto)
+        closure_ratios = []
+        
+        for i, current_dist in enumerate(current_distances):
+            if i < len(self.reference_distances):
+                ref_dist = self.reference_distances[i]
+                if ref_dist > 0:
+                    # Ratio invertido: si ratio=0.5, significa dedo a media distancia (muy cerrado)
+                    # Si ratio=1.2, significa dedo más lejos (más abierto)
+                    ratio = current_dist / ref_dist
+                    
+                    # Mapear ratio a cierre (0-1)
+                    # ratio=0.5 (muy cerrado) → cierre=0.9
+                    # ratio=1.0 (posición inicial) → cierre=0.5
+                    # ratio=1.5 (muy abierto) → cierre=0.0
+                    
+                    # Usar función inversa: cierre = 1 - min(ratio, 1.5) / 1.5
+                    cierre = max(0.0, 1.0 - (ratio / 1.5))
+                    closure_ratios.append(cierre)
+        
+        # Si no hay suficientes ratios, retornar default
+        if not closure_ratios:
+            return {"u_index": 0.5, "u_group": 0.5, "u_thumb": 0.5}
+        
+        # Mapear closure ratios a servos
+        if len(closure_ratios) >= 5:
+            u_thumb = closure_ratios[0]
+            u_index = closure_ratios[1]
+            u_middle = closure_ratios[2]
+            u_ring = closure_ratios[3]
+            u_pinky = closure_ratios[4]
+            u_group = (u_middle + u_ring + u_pinky) / 3.0
+        
+        elif len(closure_ratios) >= 4:
+            u_index = closure_ratios[0]
+            u_middle = closure_ratios[1]
+            u_ring = closure_ratios[2]
+            u_pinky = closure_ratios[3]
+            u_thumb = u_index * 0.8
+            u_group = (u_middle + u_ring + u_pinky) / 3.0
+        
+        elif len(closure_ratios) >= 3:
+            u_index = closure_ratios[0]
+            u_middle = closure_ratios[1]
+            u_ring = closure_ratios[2]
+            u_pinky = u_ring * 0.9
+            u_thumb = u_index * 0.7
+            u_group = (u_middle + u_ring) / 2.0
+        
+        elif len(closure_ratios) >= 2:
+            u_index = closure_ratios[0]
+            u_middle = closure_ratios[1]
+            u_ring = u_middle
+            u_pinky = u_middle
+            u_thumb = u_index * 0.9
+            u_group = u_middle
+        
+        else:
+            u_index = closure_ratios[0]
+            u_middle = u_index * 0.8
+            u_ring = u_middle
+            u_pinky = u_middle
+            u_thumb = u_index * 0.7
+            u_group = u_middle
+        
+        # Clamp
+        return {
+            "u_index": max(0.0, min(1.0, u_index)),
+            "u_group": max(0.0, min(1.0, u_group)),
+            "u_thumb": max(0.0, min(1.0, u_thumb))
+        }
     def get_finger_angles(self, landmarks: Dict) -> Dict[str, float]:
         """Retorna Ã¡ngulos de flexiÃ³n simulados (no usa landmarks reales)."""
         # Para versiÃ³n simplificada, retornar valores por defecto
@@ -262,10 +390,10 @@ class HandTracker:
 
     def landmarks_to_servo_values(self, landmarks: Dict) -> Dict[str, float]:
         """
-        Mapea landmarks 2D a valores de servo usando distancias desde la base.
+        Mapea landmarks 2D a valores de servo usando el esqueleto calibrado.
         
-        Los landmarks son: [base, punto_dedo1, punto_dedo2, ...]
-        Calculamos distancia de cada punta a la base para inferir flexiÃ³n.
+        Si calibracion activa, usa cambios relativos (mucho mas estable).
+        Si no esta calibrada, hace calibracion automatica en primer landmark.
         
         Args:
             landmarks: Diccionario con landmarks_2d (lista de (x,y))
@@ -275,125 +403,38 @@ class HandTracker:
         """
         landmarks_2d = landmarks.get("landmarks_2d", [])
         
+        # Si no hay landmarks, usar fallback por finger_count
         if len(landmarks_2d) < 2:
-            # Si no hay suficientes landmarks, usar finger_count como fallback
             finger_count = landmarks.get("finger_count", 0)
             finger_ratio = finger_count / 5.0
             base_closure = 1.0 - (finger_ratio * 0.95)
-            solidity = landmarks.get("solidity", 0.5)
-            solidity_factor = (solidity - 0.4) / 0.3
-            solidity_factor = max(0.0, min(1.0, solidity_factor))
-            adjusted_closure = base_closure + (solidity_factor - 0.5) * 0.3
-            adjusted_closure = max(0.0, min(1.0, adjusted_closure))
-            
-            u_index = adjusted_closure
-            u_group = adjusted_closure * 0.95
-            u_thumb = 0.9 - (u_index * 0.7)
             
             return {
-                "u_index": round(u_index, 2),
-                "u_group": round(u_group, 2),
-                "u_thumb": round(u_thumb, 2)
+                "u_index": round(base_closure, 2),
+                "u_group": round(base_closure * 0.95, 2),
+                "u_thumb": round(0.9 - (base_closure * 0.7), 2)
             }
         
-        # Usar landmarks detectados
-        base = np.array(landmarks_2d[0])  # Centro/base de la palma
-        fingertip_distances = []
-        
-        # Calcular distancia de cada punta de dedo a la base
-        for i in range(1, len(landmarks_2d)):
-            fingertip = np.array(landmarks_2d[i])
-            distance = np.linalg.norm(fingertip - base)
-            fingertip_distances.append(distance)
-        
-        # Si no hay suficientes puntas de dedo
-        if not fingertip_distances:
-            # Fallback: usar finger_count
-            u_index = 0.3
-            u_group = 0.3
-            u_thumb = 0.6
+        # ===== CALIBRACION AUTOMATICA =====
+        # Si es la primera deteccion de mano, hacer calibracion
+        if not self.skeleton_calibrated:
+            self.calibrate_hand_skeleton(landmarks_2d)
+            # Retornar posicion inicial (referencia)
             return {
-                "u_index": round(u_index, 2),
-                "u_group": round(u_group, 2),
-                "u_thumb": round(u_thumb, 2)
+                "u_index": 0.5,
+                "u_group": 0.5,
+                "u_thumb": 0.5
             }
         
-        # Normalizar distancias
-        max_distance = max(fingertip_distances) if fingertip_distances else 1.0
-        min_distance = min(fingertip_distances) if fingertip_distances else 0.0
-        distance_range = max_distance - min_distance if max_distance > min_distance else 1.0
-        
-        # Mapear distancias a cierre (inverso: distancia corta = cerrado)
-        # Si distancia = mÃ¡xima (dedo extendido) â†’ cierre = 0.0 (abierto)
-        # Si distancia = mÃ­nima (dedo doblado) â†’ cierre = 1.0 (cerrado)
-        normalized_distances = []
-        for d in fingertip_distances:
-            norm = (max_distance - d) / distance_range if distance_range > 0 else 0.5
-            norm = max(0.0, min(1.0, norm))
-            normalized_distances.append(norm)
-        
-        # Mapear dedos a servos (asumiendo orden: pulgar, Ã­ndice, medio, anular, meÃ±ique)
-        # Aproximadamente: [base, pulgar, Ã­ndice, medio, anular, meÃ±ique]
-        
-        # Caso: 5 dedos detectados
-        if len(normalized_distances) >= 5:
-            u_thumb = normalized_distances[0]  # Pulgar (primer dedo)
-            u_index = normalized_distances[1]  # Ãndice (segundo dedo)
-            u_middle = normalized_distances[2]  # Medio
-            u_ring = normalized_distances[3]   # Anular
-            u_pinky = normalized_distances[4]  # MeÃ±ique
-            
-            # Grupo = promedio de medio, anular, meÃ±ique
-            u_group = (u_middle + u_ring + u_pinky) / 3.0
-            
-        # Caso: 4 dedos detectados (posiblemente sin pulgar o sin meÃ±ique)
-        elif len(normalized_distances) >= 4:
-            u_index = normalized_distances[0]
-            u_middle = normalized_distances[1]
-            u_ring = normalized_distances[2]
-            u_pinky = normalized_distances[3]
-            u_thumb = u_index * 0.8  # Pulgar sigue al Ã­ndice pero menos
-            u_group = (u_middle + u_ring + u_pinky) / 3.0
-            
-        # Caso: 3 dedos detectados
-        elif len(normalized_distances) >= 3:
-            u_index = normalized_distances[0]
-            u_middle = normalized_distances[1]
-            u_ring = normalized_distances[2]
-            u_pinky = u_ring * 0.9
-            u_thumb = u_index * 0.7
-            u_group = (u_middle + u_ring) / 2.0
-            
-        # Caso: 2 dedos detectados
-        elif len(normalized_distances) >= 2:
-            u_index = normalized_distances[0]
-            u_middle = normalized_distances[1]
-            u_ring = u_middle
-            u_pinky = u_middle
-            u_thumb = u_index * 0.9
-            u_group = u_middle
-            
-        # Caso: 1 dedo detectado
-        else:
-            u_index = normalized_distances[0]
-            u_middle = u_index * 0.8
-            u_ring = u_middle
-            u_pinky = u_middle
-            u_thumb = u_index * 0.7
-            u_group = u_middle
-        
-        # Clamp todos los valores a 0-1
-        u_index = max(0.0, min(1.0, u_index))
-        u_group = max(0.0, min(1.0, u_group))
-        u_thumb = max(0.0, min(1.0, u_thumb))
+        # ===== USAR CALIBRACION PARA TRACKING SUAVE =====
+        # Calcular cierre relativo usando el esqueleto calibrado
+        servo_values = self.get_finger_closure_from_landmarks(landmarks_2d)
         
         return {
-            "u_index": round(u_index, 2),
-            "u_group": round(u_group, 2),
-            "u_thumb": round(u_thumb, 2)
+            "u_index": round(servo_values["u_index"], 2),
+            "u_group": round(servo_values["u_group"], 2),
+            "u_thumb": round(servo_values["u_thumb"], 2)
         }
-
-
 
     def release(self):
         """Libera recursos."""
@@ -463,4 +504,5 @@ class HandTrackingThread(threading.Thread):
             return self.hand_data_queue.get_nowait()
         except:
             return None
+
 
