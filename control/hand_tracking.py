@@ -130,43 +130,85 @@ class HandTracker:
                 cv2.drawContours(annotated_frame, [largest_contour], 0, (0, 255, 0), 2)
                 cv2.drawContours(annotated_frame, [hull], 0, (255, 0, 0), 2)
                 
-                # Contour approximation para contar dedos
-                epsilon = 0.02 * perimeter  # Tolerancia más pequeña
-                approx = cv2.approxPolyDP(largest_contour, epsilon, True)
+                # ===== LANDMARK DETECTION: Extraer nodos de la mano =====
+                defects = None
+                hull_indices = cv2.convexHull(largest_contour, returnPoints=False)
+                if len(hull_indices) > 3:
+                    defects = cv2.convexityDefects(largest_contour, hull_indices)
                 
-                # Número de vértices ÷ 2.5 ≈ número de dedos (base)
-                vertex_count = len(approx)
-                finger_count_approx = max(1, min(int(vertex_count / 2.5), 5))
+                landmarks_2d = self._extract_landmarks(largest_contour, hull, defects, largest_contour)
                 
-                # ===== INFERIR DEDOS OCULTOS =====
-                # Si la solidity es muy alta (forma compacta) y el área es grande,
-                # probablemente hay dedos ocultos que no se ven en el contorno
+                # Dibujar landmarks en la imagen
+                for i, (x, y) in enumerate(landmarks_2d):
+                    # Color diferente para la base
+                    color = (255, 0, 255) if i == 0 else (0, 255, 255)
+                    cv2.circle(annotated_frame, (int(x), int(y)), 8, color, -1)
+                    cv2.putText(annotated_frame, f"N{i}", (int(x)+10, int(y)-10),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 
-                # Calcular ratio de circularidad
-                # Una forma más circular = más cerrada = más dedos ocultos
-                area_ratio = area / hull_area if hull_area > 0 else 0  # Solidity
+                # Contar dedos = número de landmarks - 1 (la base)
+                finger_count = max(1, min(len(landmarks_2d) - 1, 5))
                 
-                # Si solidity > 0.70, la mano está muy cerrada
-                # Aumentar finger_count porque hay dedos ocultos
-                if solidity > 0.72:  # Mano muy cerrada (puño)
-                    finger_count = max(1, finger_count_approx - 2)  # Reducir conteo (hay menos vértices visibles)
-                elif solidity > 0.65:  # Mano moderadamente cerrada
-                    finger_count = finger_count_approx  # Mantener estimación
-                elif solidity > 0.55:  # Mano intermedia
-                    finger_count = finger_count_approx + 1  # Probablemente hay dedos apenas no detectados
-                else:  # Mano abierta (solidity < 0.55)
-                    finger_count = max(finger_count_approx, 4)  # Al menos 4 dedos
-                
-                # Clamp entre 1 y 5
-                finger_count = max(1, min(int(finger_count), 5))
-                
+                hand_data["landmarks_2d"] = landmarks_2d
                 hand_data["finger_count"] = finger_count
-                hand_data["finger_count_approx"] = finger_count_approx  # Mantener el valor original
-                hand_data["hand_area"] = area
-                hand_data["solidity"] = solidity
-                hand_data["perimeter"] = perimeter
         
         return hand_data, annotated_frame
+
+    def _extract_landmarks(self, contour, hull, defects, largest_contour):
+        """
+        Extrae landmarks (nodos) de la mano basado en convex hull defects.
+        Retorna lista de (x, y) coordenadas de puntos clave.
+        """
+        landmarks = []
+        
+        # Centroide (base/palma)
+        M = cv2.moments(largest_contour)
+        if M["m00"] > 0:
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
+            landmarks.append((cx, cy))  # Primer landmark = base
+        
+        # Extraer puntos desde convex hull defects
+        if defects is not None:
+            defect_points = []
+            for i in range(defects.shape[0]):
+                s, e, f, d = defects[i, 0]
+                far = tuple(contour[f][0])
+                defect_points.append(far)
+            
+            # Ordenar por ángulo desde el centroide
+            if landmarks:
+                center = landmarks[0]
+                defect_points.sort(
+                    key=lambda p: np.arctan2(p[1] - center[1], p[0] - center[0])
+                )
+            
+            # Limitar a 5 puntos de defects (máximo 5 dedos)
+            defect_points = defect_points[:5]
+            landmarks.extend(defect_points)
+        
+        # Si no hay suficientes landmarks, agregar puntos extremos
+        if len(landmarks) < 4:
+            extremes = []
+            # Punto más arriba
+            top = contour[contour[:, :, 1].argmin()][0]
+            extremes.append(tuple(top))
+            
+            # Punto más a la derecha
+            right = contour[contour[:, :, 0].argmax()][0]
+            extremes.append(tuple(right))
+            
+            # Punto más abajo
+            bottom = contour[contour[:, :, 1].argmax()][0]
+            extremes.append(tuple(bottom))
+            
+            # Punto más a la izquierda
+            left = contour[contour[:, :, 0].argmin()][0]
+            extremes.append(tuple(left))
+            
+            landmarks.extend(extremes)
+        
+        return landmarks[:6]  # Máximo 6 landmarks (base + 5 dedos)
 
     def get_finger_angles(self, landmarks: Dict) -> Dict[str, float]:
         """Retorna ángulos de flexión simulados (no usa landmarks reales)."""
@@ -220,69 +262,137 @@ class HandTracker:
 
     def landmarks_to_servo_values(self, landmarks: Dict) -> Dict[str, float]:
         """
-        Mapea datos de mano a valores de servomotor con transiciones suaves.
+        Mapea landmarks 2D a valores de servo usando distancias desde la base.
+        
+        Los landmarks son: [base, punto_dedo1, punto_dedo2, ...]
+        Calculamos distancia de cada punta a la base para inferir flexión.
         
         Args:
-            landmarks: Diccionario de datos de mano con finger_count y solidity
+            landmarks: Diccionario con landmarks_2d (lista de (x,y))
             
         Returns:
-            Valores normalizados suavizados: {u_index, u_group, u_thumb} (0.0-1.0)
+            Valores normalizados: {u_index, u_group, u_thumb}
         """
-        finger_count = landmarks.get("finger_count", 0)
-        solidity = landmarks.get("solidity", 0.5)
-        perimeter = landmarks.get("perimeter", 0)
+        landmarks_2d = landmarks.get("landmarks_2d", [])
         
-        # Mapeo continuo basado en finger_count y solidity
-        # Idea: 
-        # - finger_count=0 (puño) → cerrado (0.9)
-        # - finger_count=5 (abierto) → abierto (0.0)
-        # - solidity > 0.65 → más cerrado
-        # - solidity < 0.55 → más abierto
+        if len(landmarks_2d) < 2:
+            # Si no hay suficientes landmarks, usar finger_count como fallback
+            finger_count = landmarks.get("finger_count", 0)
+            finger_ratio = finger_count / 5.0
+            base_closure = 1.0 - (finger_ratio * 0.95)
+            solidity = landmarks.get("solidity", 0.5)
+            solidity_factor = (solidity - 0.4) / 0.3
+            solidity_factor = max(0.0, min(1.0, solidity_factor))
+            adjusted_closure = base_closure + (solidity_factor - 0.5) * 0.3
+            adjusted_closure = max(0.0, min(1.0, adjusted_closure))
+            
+            u_index = adjusted_closure
+            u_group = adjusted_closure * 0.95
+            u_thumb = 0.9 - (u_index * 0.7)
+            
+            return {
+                "u_index": round(u_index, 2),
+                "u_group": round(u_group, 2),
+                "u_thumb": round(u_thumb, 2)
+            }
         
-        # Mapa lineal: finger_count → cierre relativo
-        # 0 dedos -> muy cerrado (0.95)
-        # 1 dedo -> cerrado (0.75)
-        # 2-3 dedos -> intermedio (0.5)
-        # 4-5 dedos -> abierto (0.1)
+        # Usar landmarks detectados
+        base = np.array(landmarks_2d[0])  # Centro/base de la palma
+        fingertip_distances = []
         
-        finger_ratio = finger_count / 5.0  # Normalizar a 0-1
+        # Calcular distancia de cada punta de dedo a la base
+        for i in range(1, len(landmarks_2d)):
+            fingertip = np.array(landmarks_2d[i])
+            distance = np.linalg.norm(fingertip - base)
+            fingertip_distances.append(distance)
         
-        # Base: mapeo inverso de finger_count
-        # Más dedos = más abierto (menos cierre)
-        base_closure = 1.0 - (finger_ratio * 0.95)  # Rango: 0.05 - 1.0
+        # Si no hay suficientes puntas de dedo
+        if not fingertip_distances:
+            # Fallback: usar finger_count
+            u_index = 0.3
+            u_group = 0.3
+            u_thumb = 0.6
+            return {
+                "u_index": round(u_index, 2),
+                "u_group": round(u_group, 2),
+                "u_thumb": round(u_thumb, 2)
+            }
         
-        # Ajustar por solidity
-        # Si solidity es muy alta (puño) -> más cierre
-        # Si solidity es muy baja (abierto) -> menos cierre
-        solidity_factor = (solidity - 0.4) / 0.3  # Normalizar solidity 0.4-0.7 a 0-1
-        solidity_factor = max(0.0, min(1.0, solidity_factor))  # Clamp 0-1
+        # Normalizar distancias
+        max_distance = max(fingertip_distances) if fingertip_distances else 1.0
+        min_distance = min(fingertip_distances) if fingertip_distances else 0.0
+        distance_range = max_distance - min_distance if max_distance > min_distance else 1.0
         
-        # Combinar: base_closure ajustada por solidity
-        # Si solidity está alta, refuerza el cierre
-        # Si solidity está baja, refuerza la apertura
-        adjusted_closure = base_closure + (solidity_factor - 0.5) * 0.3
-        adjusted_closure = max(0.0, min(1.0, adjusted_closure))  # Clamp 0-1
+        # Mapear distancias a cierre (inverso: distancia corta = cerrado)
+        # Si distancia = máxima (dedo extendido) → cierre = 0.0 (abierto)
+        # Si distancia = mínima (dedo doblado) → cierre = 1.0 (cerrado)
+        normalized_distances = []
+        for d in fingertip_distances:
+            norm = (max_distance - d) / distance_range if distance_range > 0 else 0.5
+            norm = max(0.0, min(1.0, norm))
+            normalized_distances.append(norm)
         
-        # Mapeo de dedos a servos específicos:
-        # Índice: sigue finger_count directamente
-        # Grupo (Medio, Anular, Meñique): similar pero con offset
-        # Pulgar: busca oposición (generalmente más cerrado)
+        # Mapear dedos a servos (asumiendo orden: pulgar, índice, medio, anular, meñique)
+        # Aproximadamente: [base, pulgar, índice, medio, anular, meñique]
         
-        u_index = adjusted_closure  # 0-1 (0=abierto, 1=cerrado)
+        # Caso: 5 dedos detectados
+        if len(normalized_distances) >= 5:
+            u_thumb = normalized_distances[0]  # Pulgar (primer dedo)
+            u_index = normalized_distances[1]  # Índice (segundo dedo)
+            u_middle = normalized_distances[2]  # Medio
+            u_ring = normalized_distances[3]   # Anular
+            u_pinky = normalized_distances[4]  # Meñique
+            
+            # Grupo = promedio de medio, anular, meñique
+            u_group = (u_middle + u_ring + u_pinky) / 3.0
+            
+        # Caso: 4 dedos detectados (posiblemente sin pulgar o sin meñique)
+        elif len(normalized_distances) >= 4:
+            u_index = normalized_distances[0]
+            u_middle = normalized_distances[1]
+            u_ring = normalized_distances[2]
+            u_pinky = normalized_distances[3]
+            u_thumb = u_index * 0.8  # Pulgar sigue al índice pero menos
+            u_group = (u_middle + u_ring + u_pinky) / 3.0
+            
+        # Caso: 3 dedos detectados
+        elif len(normalized_distances) >= 3:
+            u_index = normalized_distances[0]
+            u_middle = normalized_distances[1]
+            u_ring = normalized_distances[2]
+            u_pinky = u_ring * 0.9
+            u_thumb = u_index * 0.7
+            u_group = (u_middle + u_ring) / 2.0
+            
+        # Caso: 2 dedos detectados
+        elif len(normalized_distances) >= 2:
+            u_index = normalized_distances[0]
+            u_middle = normalized_distances[1]
+            u_ring = u_middle
+            u_pinky = u_middle
+            u_thumb = u_index * 0.9
+            u_group = u_middle
+            
+        # Caso: 1 dedo detectado
+        else:
+            u_index = normalized_distances[0]
+            u_middle = u_index * 0.8
+            u_ring = u_middle
+            u_pinky = u_middle
+            u_thumb = u_index * 0.7
+            u_group = u_middle
         
-        # Grupo: similar al índice pero con un poco más de independencia
-        u_group = adjusted_closure * 0.95  # Ligeramente menos que índice
-        
-        # Pulgar: oposición constante con el índice
-        # Cuando índice está abierto (u_index=0) -> pulgar cerrado (0.9)
-        # Cuando índice está cerrado (u_index=1) -> pulgar abierto (0.2)
-        u_thumb = 0.9 - (u_index * 0.7)  # Rango: 0.2-0.9
+        # Clamp todos los valores a 0-1
+        u_index = max(0.0, min(1.0, u_index))
+        u_group = max(0.0, min(1.0, u_group))
+        u_thumb = max(0.0, min(1.0, u_thumb))
         
         return {
             "u_index": round(u_index, 2),
             "u_group": round(u_group, 2),
             "u_thumb": round(u_thumb, 2)
         }
+
 
 
     def release(self):
