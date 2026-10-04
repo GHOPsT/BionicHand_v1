@@ -1,5 +1,5 @@
-"""
-Módulo de rastreo de mano en tiempo real usando OpenCV.
+﻿"""
+MÃ³dulo de rastreo de mano en tiempo real usando OpenCV.
 Detecta mano por contorno de piel y mapea a gestos simples.
 """
 
@@ -13,7 +13,7 @@ from queue import Queue
 class HandTracker:
     """
     Rastreador de mano simplificado usando OpenCV.
-    Detecta mano por contorno de piel y mapea a ángulos de servomotor.
+    Detecta mano por contorno de piel y mapea a Ã¡ngulos de servomotor.
     """
 
     def __init__(self, max_hands=1, confidence=0.7):
@@ -21,27 +21,27 @@ class HandTracker:
         Inicializa el rastreador de mano con rangos HSV mejorados.
         
         Args:
-            max_hands: Número máximo de manos a detectar
+            max_hands: NÃºmero mÃ¡ximo de manos a detectar
             confidence: Umbral de confianza
         """
         self.confidence = confidence
         
-        # RANGOS HSV CALIBRADOS para tu iluminación específica
+        # RANGOS HSV CALIBRADOS para tu iluminaciÃ³n especÃ­fica
         # Valores optimizados mediante calibrate_hsv.py
         
         # Rango Calibrado Principal: H(0-23), S(45-158), V(127-211)
         self.lower_skin_1 = np.array([0, 45, 127], dtype=np.uint8)
         self.upper_skin_1 = np.array([23, 158, 211], dtype=np.uint8)
         
-        # Rango 2: Variación +/- 2 en H para capturar bordes
+        # Rango 2: VariaciÃ³n +/- 2 en H para capturar bordes
         self.lower_skin_2 = np.array([0, 40, 120], dtype=np.uint8)
         self.upper_skin_2 = np.array([25, 165, 220], dtype=np.uint8)
         
-        # Rango 3: Sensibilidad extra en S (más permisivo)
+        # Rango 3: Sensibilidad extra en S (mÃ¡s permisivo)
         self.lower_skin_3 = np.array([0, 35, 115], dtype=np.uint8)
         self.upper_skin_3 = np.array([25, 170, 225], dtype=np.uint8)
         
-        # Rango 4: Más permisivo en V (capturar sombras)
+        # Rango 4: MÃ¡s permisivo en V (capturar sombras)
         self.lower_skin_4 = np.array([0, 45, 100], dtype=np.uint8)
         self.upper_skin_4 = np.array([25, 160, 230], dtype=np.uint8)
 
@@ -63,18 +63,18 @@ class HandTracker:
         # Convertir a HSV
         hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         
-        # Detectar piel con MÚLTIPLES rangos (4 en total)
+        # Detectar piel con MÃšLTIPLES rangos (4 en total)
         mask1 = cv2.inRange(hsv_frame, self.lower_skin_1, self.upper_skin_1)
         mask2 = cv2.inRange(hsv_frame, self.lower_skin_2, self.upper_skin_2)
         mask3 = cv2.inRange(hsv_frame, self.lower_skin_3, self.upper_skin_3)
         mask4 = cv2.inRange(hsv_frame, self.lower_skin_4, self.upper_skin_4)
         
-        # Combinar todas las máscaras
+        # Combinar todas las mÃ¡scaras
         mask = cv2.bitwise_or(mask1, mask2)
         mask = cv2.bitwise_or(mask, mask3)
         mask = cv2.bitwise_or(mask, mask4)
         
-        # Morfología agresiva para limpiar ruido
+        # MorfologÃ­a agresiva para limpiar ruido
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
@@ -90,13 +90,13 @@ class HandTracker:
         hand_data = {"detected": False}
         
         if contours:
-            # Encontrar el contorno más grande (la mano)
+            # Encontrar el contorno mÃ¡s grande (la mano)
             largest_contour = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(largest_contour)
             
             h, w = frame.shape[:2]
-            min_area = (w * h) * 0.01  # Mínimo 1% del frame
-            max_area = (w * h) * 0.9   # Máximo 90% del frame
+            min_area = (w * h) * 0.01  # MÃ­nimo 1% del frame
+            max_area = (w * h) * 0.9   # MÃ¡ximo 90% del frame
             
             if min_area < area < max_area:
                 hand_data["detected"] = True
@@ -110,7 +110,7 @@ class HandTracker:
                 # Solidity (compactness)
                 solidity = area / hull_area if hull_area > 0 else 0
                 
-                # Perímetro
+                # PerÃ­metro
                 perimeter = cv2.arcLength(largest_contour, True)
                 
                 # Momentos para centroide
@@ -146,7 +146,7 @@ class HandTracker:
                     cv2.putText(annotated_frame, f"N{i}", (int(x)+10, int(y)-10),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 
-                # Contar dedos = número de landmarks - 1 (la base)
+                # Contar dedos = nÃºmero de landmarks - 1 (la base)
                 finger_count = max(1, min(len(landmarks_2d) - 1, 5))
                 
                 hand_data["landmarks_2d"] = landmarks_2d
@@ -172,47 +172,47 @@ class HandTracker:
         if defects is not None:
             defect_points = []
             for i in range(defects.shape[0]):
-                s, e, f, d = defects[i, 0]
+                s, e, f, d = defects[i].ravel()
                 far = tuple(contour[f][0])
                 defect_points.append(far)
             
-            # Ordenar por ángulo desde el centroide
+            # Ordenar por Ã¡ngulo desde el centroide
             if landmarks:
                 center = landmarks[0]
                 defect_points.sort(
                     key=lambda p: np.arctan2(p[1] - center[1], p[0] - center[0])
                 )
             
-            # Limitar a 5 puntos de defects (máximo 5 dedos)
+            # Limitar a 5 puntos de defects (mÃ¡ximo 5 dedos)
             defect_points = defect_points[:5]
             landmarks.extend(defect_points)
         
         # Si no hay suficientes landmarks, agregar puntos extremos
         if len(landmarks) < 4:
             extremes = []
-            # Punto más arriba
+            # Punto mÃ¡s arriba
             top = contour[contour[:, :, 1].argmin()][0]
             extremes.append(tuple(top))
             
-            # Punto más a la derecha
+            # Punto mÃ¡s a la derecha
             right = contour[contour[:, :, 0].argmax()][0]
             extremes.append(tuple(right))
             
-            # Punto más abajo
+            # Punto mÃ¡s abajo
             bottom = contour[contour[:, :, 1].argmax()][0]
             extremes.append(tuple(bottom))
             
-            # Punto más a la izquierda
+            # Punto mÃ¡s a la izquierda
             left = contour[contour[:, :, 0].argmin()][0]
             extremes.append(tuple(left))
             
             landmarks.extend(extremes)
         
-        return landmarks[:6]  # Máximo 6 landmarks (base + 5 dedos)
+        return landmarks[:6]  # MÃ¡ximo 6 landmarks (base + 5 dedos)
 
     def get_finger_angles(self, landmarks: Dict) -> Dict[str, float]:
-        """Retorna ángulos de flexión simulados (no usa landmarks reales)."""
-        # Para versión simplificada, retornar valores por defecto
+        """Retorna Ã¡ngulos de flexiÃ³n simulados (no usa landmarks reales)."""
+        # Para versiÃ³n simplificada, retornar valores por defecto
         return {
             "INDEX": {"mcp_normalized": 0.5, "pip_normalized": 0.4},
             "MIDDLE": {"mcp_normalized": 0.4, "pip_normalized": 0.3},
@@ -239,13 +239,13 @@ class HandTracker:
         solidity = landmarks.get("solidity", 0.5)
         perimeter = landmarks.get("perimeter", 0)
         
-        # Lógica mejorada de detección de gestos
+        # LÃ³gica mejorada de detecciÃ³n de gestos
         
-        # PUÑO: Área grande, solidity alta (forma compacta), pocos dedos visibles
+        # PUÃ‘O: Ãrea grande, solidity alta (forma compacta), pocos dedos visibles
         if solidity > 0.65 and finger_count <= 1:
             return "FIST"
         
-        # MANO ABIERTA: Muchos dedos separados, perímetro grande, solidity media
+        # MANO ABIERTA: Muchos dedos separados, perÃ­metro grande, solidity media
         if finger_count >= 4 and solidity < 0.55:
             return "OPEN_PALM"
         
@@ -253,7 +253,7 @@ class HandTracker:
         if 2 <= finger_count <= 3 and solidity > 0.60:
             return "PINCH"
         
-        # SEÑALAR: 1 dedo extendido, perímetro pequeño relativo
+        # SEÃ‘ALAR: 1 dedo extendido, perÃ­metro pequeÃ±o relativo
         if finger_count == 1 and solidity > 0.70:
             return "POINTING"
         
@@ -265,7 +265,7 @@ class HandTracker:
         Mapea landmarks 2D a valores de servo usando distancias desde la base.
         
         Los landmarks son: [base, punto_dedo1, punto_dedo2, ...]
-        Calculamos distancia de cada punta a la base para inferir flexión.
+        Calculamos distancia de cada punta a la base para inferir flexiÃ³n.
         
         Args:
             landmarks: Diccionario con landmarks_2d (lista de (x,y))
@@ -324,35 +324,35 @@ class HandTracker:
         distance_range = max_distance - min_distance if max_distance > min_distance else 1.0
         
         # Mapear distancias a cierre (inverso: distancia corta = cerrado)
-        # Si distancia = máxima (dedo extendido) → cierre = 0.0 (abierto)
-        # Si distancia = mínima (dedo doblado) → cierre = 1.0 (cerrado)
+        # Si distancia = mÃ¡xima (dedo extendido) â†’ cierre = 0.0 (abierto)
+        # Si distancia = mÃ­nima (dedo doblado) â†’ cierre = 1.0 (cerrado)
         normalized_distances = []
         for d in fingertip_distances:
             norm = (max_distance - d) / distance_range if distance_range > 0 else 0.5
             norm = max(0.0, min(1.0, norm))
             normalized_distances.append(norm)
         
-        # Mapear dedos a servos (asumiendo orden: pulgar, índice, medio, anular, meñique)
-        # Aproximadamente: [base, pulgar, índice, medio, anular, meñique]
+        # Mapear dedos a servos (asumiendo orden: pulgar, Ã­ndice, medio, anular, meÃ±ique)
+        # Aproximadamente: [base, pulgar, Ã­ndice, medio, anular, meÃ±ique]
         
         # Caso: 5 dedos detectados
         if len(normalized_distances) >= 5:
             u_thumb = normalized_distances[0]  # Pulgar (primer dedo)
-            u_index = normalized_distances[1]  # Índice (segundo dedo)
+            u_index = normalized_distances[1]  # Ãndice (segundo dedo)
             u_middle = normalized_distances[2]  # Medio
             u_ring = normalized_distances[3]   # Anular
-            u_pinky = normalized_distances[4]  # Meñique
+            u_pinky = normalized_distances[4]  # MeÃ±ique
             
-            # Grupo = promedio de medio, anular, meñique
+            # Grupo = promedio de medio, anular, meÃ±ique
             u_group = (u_middle + u_ring + u_pinky) / 3.0
             
-        # Caso: 4 dedos detectados (posiblemente sin pulgar o sin meñique)
+        # Caso: 4 dedos detectados (posiblemente sin pulgar o sin meÃ±ique)
         elif len(normalized_distances) >= 4:
             u_index = normalized_distances[0]
             u_middle = normalized_distances[1]
             u_ring = normalized_distances[2]
             u_pinky = normalized_distances[3]
-            u_thumb = u_index * 0.8  # Pulgar sigue al índice pero menos
+            u_thumb = u_index * 0.8  # Pulgar sigue al Ã­ndice pero menos
             u_group = (u_middle + u_ring + u_pinky) / 3.0
             
         # Caso: 3 dedos detectados
@@ -432,7 +432,7 @@ class HandTrackingThread(threading.Thread):
             # Procesar frame
             hand_data, annotated_frame = self.tracker.process_frame(frame)
             
-            # Enviar a colas (descartar si están llenas)
+            # Enviar a colas (descartar si estÃ¡n llenas)
             try:
                 self.frame_queue.put_nowait(annotated_frame)
             except:
@@ -451,15 +451,16 @@ class HandTrackingThread(threading.Thread):
         self.tracker.release()
     
     def get_frame(self) -> Optional[np.ndarray]:
-        """Obtiene el último frame procesado."""
+        """Obtiene el Ãºltimo frame procesado."""
         try:
             return self.frame_queue.get_nowait()
         except:
             return None
     
     def get_hand_data(self) -> Optional[Dict]:
-        """Obtiene los últimos datos de mano."""
+        """Obtiene los Ãºltimos datos de mano."""
         try:
             return self.hand_data_queue.get_nowait()
         except:
             return None
+
