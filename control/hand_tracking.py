@@ -134,11 +134,34 @@ class HandTracker:
                 epsilon = 0.02 * perimeter  # Tolerancia más pequeña
                 approx = cv2.approxPolyDP(largest_contour, epsilon, True)
                 
-                # Número de vértices ÷ 2.5 ≈ número de dedos
-                finger_count = len(approx)
-                finger_count = max(1, min(int(finger_count / 2.5), 5))
+                # Número de vértices ÷ 2.5 ≈ número de dedos (base)
+                vertex_count = len(approx)
+                finger_count_approx = max(1, min(int(vertex_count / 2.5), 5))
+                
+                # ===== INFERIR DEDOS OCULTOS =====
+                # Si la solidity es muy alta (forma compacta) y el área es grande,
+                # probablemente hay dedos ocultos que no se ven en el contorno
+                
+                # Calcular ratio de circularidad
+                # Una forma más circular = más cerrada = más dedos ocultos
+                area_ratio = area / hull_area if hull_area > 0 else 0  # Solidity
+                
+                # Si solidity > 0.70, la mano está muy cerrada
+                # Aumentar finger_count porque hay dedos ocultos
+                if solidity > 0.72:  # Mano muy cerrada (puño)
+                    finger_count = max(1, finger_count_approx - 2)  # Reducir conteo (hay menos vértices visibles)
+                elif solidity > 0.65:  # Mano moderadamente cerrada
+                    finger_count = finger_count_approx  # Mantener estimación
+                elif solidity > 0.55:  # Mano intermedia
+                    finger_count = finger_count_approx + 1  # Probablemente hay dedos apenas no detectados
+                else:  # Mano abierta (solidity < 0.55)
+                    finger_count = max(finger_count_approx, 4)  # Al menos 4 dedos
+                
+                # Clamp entre 1 y 5
+                finger_count = max(1, min(int(finger_count), 5))
                 
                 hand_data["finger_count"] = finger_count
+                hand_data["finger_count_approx"] = finger_count_approx  # Mantener el valor original
                 hand_data["hand_area"] = area
                 hand_data["solidity"] = solidity
                 hand_data["perimeter"] = perimeter
