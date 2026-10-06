@@ -173,19 +173,21 @@ class Hand3DCanvas(FigureCanvas):
             phi = np.radians(t1_deg + t2_deg)
             origin = np.array([-12.0, 20.0, 9.0])
             
-            # Vector oposición 3D
+            # Oposición 3D mejorada hacia el índice
+            # Aumentada componente X (1.0 en lugar de 0.6) para acercamiento horizontal
+            # Reducida componente Z para evitar levantamiento excesivo
             v1 = np.array([
-                -l1 * np.cos(t1) * 0.7 + 0.6 * l1 * np.sin(t1),
-                 l1 * np.cos(t1) * 0.7 - 0.2 * l1 * np.sin(t1),
-                 l1 * 0.2 + l1 * np.sin(t1) * 0.8
+                -l1 * np.cos(t1) * 0.4 + 1.0 * l1 * np.sin(t1),
+                 l1 * np.cos(t1) * 0.5 - 0.7 * l1 * np.sin(t1),
+                 l1 * 0.15 + l1 * np.sin(t1) * 0.6
             ])
             p1 = origin + v1
             
-            # Segunda falange
+            # Segunda falange del pulgar
             v2 = np.array([
-                -l2 * 0.5 * np.cos(phi) + 0.7 * l2 * np.sin(phi),
-                 l2 * np.cos(phi) * 0.6 - 0.4 * l2 * np.sin(phi),
-                 l2 * 0.2 + l2 * np.sin(phi) * 0.9
+                -l2 * 0.3 * np.cos(phi) + 1.0 * l2 * np.sin(phi),
+                 l2 * np.cos(phi) * 0.8 - 0.6 * l2 * np.sin(phi),
+                 l2 * 0.15 + l2 * np.sin(phi) * 0.7
             ])
             p2 = p1 + v2
             
