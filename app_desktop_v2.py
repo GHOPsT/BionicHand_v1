@@ -182,7 +182,6 @@ class Hand3DCanvas(FigureCanvas):
             ])
             # Normalizar v1 para mantener longitud exacta de l1
             v1 = v1_raw / np.linalg.norm(v1_raw) * l1
-            p1 = origin + v1
             
             # Segunda falange del pulgar
             v2_raw = np.array([
@@ -192,6 +191,21 @@ class Hand3DCanvas(FigureCanvas):
             ])
             # Normalizar v2 para mantener longitud exacta de l2
             v2 = v2_raw / np.linalg.norm(v2_raw) * l2
+            
+            # Rotación antihoraria de 15 grados alrededor del eje Z
+            rotation_angle = -np.radians(15)  # Negativo = antihorario
+            cos_a = np.cos(rotation_angle)
+            sin_a = np.sin(rotation_angle)
+            rotation_matrix = np.array([
+                [cos_a, -sin_a, 0],
+                [sin_a,  cos_a, 0],
+                [0,      0,     1]
+            ])
+            
+            v1 = rotation_matrix @ v1
+            v2 = rotation_matrix @ v2
+            
+            p1 = origin + v1
             p2 = p1 + v2
             
             pts = np.array([origin, p1, p2])
