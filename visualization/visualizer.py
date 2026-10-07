@@ -190,19 +190,23 @@ class BionicHandVisualizer:
 
             # Oposición 3D mejorada hacia el índice
             # Aumentado ligeramente X para acercamiento horizontal sin mover excesivamente
-            v1 = np.array([
+            v1_raw = np.array([
                 -l1 * np.cos(t1) * 0.6 + 0.8 * l1 * np.sin(t1),
                  l1 * np.cos(t1) * 0.65 - 0.35 * l1 * np.sin(t1),
                  l1 * 0.18 + l1 * np.sin(t1) * 0.7
             ])
+            # Normalizar v1 para mantener longitud exacta de l1
+            v1 = v1_raw / np.linalg.norm(v1_raw) * l1
             p1 = origin + v1
 
             # Segunda falange del pulgar
-            v2 = np.array([
+            v2_raw = np.array([
                 -l2 * 0.42 * np.cos(phi) + 0.85 * l2 * np.sin(phi),
                  l2 * np.cos(phi) * 0.7 - 0.5 * l2 * np.sin(phi),
                  l2 * 0.18 + l2 * np.sin(phi) * 0.8
             ])
+            # Normalizar v2 para mantener longitud exacta de l2
+            v2 = v2_raw / np.linalg.norm(v2_raw) * l2
             p2 = p1 + v2
 
             return np.array([origin, p1, p2]), t1_deg, t2_deg
