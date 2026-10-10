@@ -371,6 +371,15 @@ class BionicHandVisualizer:
         for name in finger_names:
             pts, mcp_deg, pip_deg = self._compute_finger_3d(name)
             telemetry_angles[name] = (mcp_deg, pip_deg, pts)
+            if (
+                self.current_pose_name == Pose.PINCH_GRIP.value
+                and name == "Pulgar"
+            ):
+                index_pts, _, _ = self._compute_finger_3d("Índice")
+                pts = pts.copy()
+                pts[2] = index_pts[2]
+
+            telemetry_angles[name] = (mcp_deg, pip_deg, pts)
             c = self.colors[name]
 
             # Dibujar falanges como cilindros volumétricos con radios ajustables

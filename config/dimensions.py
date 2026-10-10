@@ -17,7 +17,7 @@ FINGER_DIMENSIONS = {
 PALM_SPACING = {
     "index_to_middle": 20.767,
     "middle_to_ring": 20.653,
-    "ring_to_pinky": 22.771,  # Corrección: 21.46 → 22.771 (medida Fusion 360)
+    "ring_to_pinky": 22.771,
     "index_to_thumb_3d": 40.235,
     "index_to_thumb_proj": 37.63
 }
