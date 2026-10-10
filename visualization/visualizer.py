@@ -95,12 +95,12 @@ class BionicHandVisualizer:
     def _setup_bottom_controls(self):
         """Barra inferior: Botones + Controles Avanzados con padding para números."""
         
-        # ===== FILA 1: BOTONES DE POSES (Y=0.11-0.18) =====
-        btn_w, btn_h, btn_y = 0.17, 0.055, 0.125
-        ax_open  = self.fig.add_axes([0.01 + 0 * 0.18, btn_y, btn_w, btn_h])
-        ax_fist  = self.fig.add_axes([0.01 + 1 * 0.18, btn_y, btn_w, btn_h])
-        ax_pinch = self.fig.add_axes([0.01 + 2 * 0.18, btn_y, btn_w, btn_h])
-        ax_point = self.fig.add_axes([0.01 + 3 * 0.18, btn_y, btn_w, btn_h])
+        # ===== FILA 1: BOTONES DE POSES PRINCIPALES (Y=0.16-0.22) =====
+        btn_w, btn_h, btn_y1 = 0.17, 0.055, 0.175
+        ax_open  = self.fig.add_axes([0.01 + 0 * 0.18, btn_y1, btn_w, btn_h])
+        ax_fist  = self.fig.add_axes([0.01 + 1 * 0.18, btn_y1, btn_w, btn_h])
+        ax_pinch = self.fig.add_axes([0.01 + 2 * 0.18, btn_y1, btn_w, btn_h])
+        ax_point = self.fig.add_axes([0.01 + 3 * 0.18, btn_y1, btn_w, btn_h])
 
         self.btn_open  = Button(ax_open,  'Mano Abierta', color='#2563eb', hovercolor='#3b82f6')
         self.btn_fist  = Button(ax_fist,  'Puño Cerrado', color='#d97706', hovercolor='#f59e0b')
@@ -117,7 +117,29 @@ class BionicHandVisualizer:
         self.btn_pinch.on_clicked(lambda e: self.set_pose(Pose.PINCH_GRIP))
         self.btn_point.on_clicked(lambda e: self.set_pose(Pose.POINTING))
 
-        # ===== FILA 2: RADIOS DE CILINDROS (Y=0.065-0.085) CON PADDING =====
+        # ===== FILA 2: BOTONES DE POSES ADICIONALES (Y=0.105-0.165) =====
+        btn_y2 = 0.11
+        ax_thumbs = self.fig.add_axes([0.01 + 0 * 0.18, btn_y2, btn_w, btn_h])
+        ax_ok = self.fig.add_axes([0.01 + 1 * 0.18, btn_y2, btn_w, btn_h])
+        ax_relax = self.fig.add_axes([0.01 + 2 * 0.18, btn_y2, btn_w, btn_h])
+        ax_grab = self.fig.add_axes([0.01 + 3 * 0.18, btn_y2, btn_w, btn_h])
+
+        self.btn_thumbs = Button(ax_thumbs, 'Pulgar Arriba', color='#f59e0b', hovercolor='#fbbf24')
+        self.btn_ok     = Button(ax_ok,     'Gesto OK', color='#14b8a6', hovercolor='#2dd4bf')
+        self.btn_relax  = Button(ax_relax,  'Relajada', color='#8b5cf6', hovercolor='#a78bfa')
+        self.btn_grab   = Button(ax_grab,   'Agarre', color='#ef4444', hovercolor='#f87171')
+
+        for b in [self.btn_thumbs, self.btn_ok, self.btn_relax, self.btn_grab]:
+            b.label.set_color('#ffffff')
+            b.label.set_fontsize(9)
+            b.label.set_fontweight('bold')
+
+        self.btn_thumbs.on_clicked(lambda e: self.set_pose(Pose.THUMBS_UP))
+        self.btn_ok.on_clicked(lambda e: self.set_pose(Pose.OK_SIGN))
+        self.btn_relax.on_clicked(lambda e: self.set_pose(Pose.RELAX))
+        self.btn_grab.on_clicked(lambda e: self.set_pose(Pose.GRAB))
+
+        # ===== FILA 3: RADIOS DE CILINDROS (Y=0.065-0.085) CON PADDING =====
         slider_h = 0.025
         # Padding al inicio (0.01) con espacio suficiente para labels
         ax_rad_prox = self.fig.add_axes([0.05, 0.075, 0.29, slider_h], facecolor='#2a303c')
@@ -135,7 +157,7 @@ class BionicHandVisualizer:
         self.slider_rad_prox.on_changed(lambda v: setattr(self, 'cylinder_radius_proximal', v) or self.update_view())
         self.slider_rad_dist.on_changed(lambda v: setattr(self, 'cylinder_radius_distal', v) or self.update_view())
 
-        # ===== FILA 3: TRANSPARENCIAS (Y=0.015-0.035) CON PADDING =====
+        # ===== FILA 4: TRANSPARENCIAS (Y=0.015-0.035) CON PADDING =====
         ax_alpha_cyl = self.fig.add_axes([0.05, 0.025, 0.29, slider_h], facecolor='#2a303c')
         ax_alpha_jnt = self.fig.add_axes([0.42, 0.025, 0.29, slider_h], facecolor='#2a303c')
         
